@@ -8,13 +8,15 @@ from tokenizers import Tokenizer
 
 
 class BgeM3Embedder:
-    def __init__(self, model_dir, max_len=4096, batch_size=2):
+    def __init__(self, model_dir, max_len=2048, batch_size=4):
         self.model_dir = model_dir
         self.max_len = max_len
         self.batch_size = batch_size
         self.tok = Tokenizer.from_file(os.path.join(model_dir, "tokenizer.json"))
+        # 优先 int8 量化版（更快更省内存），否则用 fp32 原版
+        model_file = "model_int8.onnx" if os.path.isfile(os.path.join(model_dir, "model_int8.onnx")) else "model.onnx"
         self.sess = ort.InferenceSession(
-            os.path.join(model_dir, "model.onnx"),
+            os.path.join(model_dir, model_file),
             providers=["CPUExecutionProvider"],
             sess_options=ort.SessionOptions(),
         )
