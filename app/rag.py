@@ -52,7 +52,12 @@ class Store:
                 score += 1.0 / (60 + b[i])
             fused.append((i, score))
         fused.sort(key=lambda x: -x[1])
-        return [self.meta[i] for i, _ in fused[:k]]
+        out = []
+        for i, score in fused[:k]:
+            m = dict(self.meta[i])
+            m["_rrf"] = score
+            out.append(m)
+        return out
 
 
 class Retriever:
@@ -64,7 +69,7 @@ class Retriever:
             info = json.load(f)
         self.model_name = info["model"]
         self.stores = {}
-        for name in ("novel", "lore"):
+        for name in ("novel", "lore", "novel_sum"):
             p = os.path.join(self.data_dir, name)
             if os.path.isdir(p) and os.path.isfile(os.path.join(p, "vectors.npy")):
                 self.stores[name] = Store(p)
@@ -87,14 +92,26 @@ class Retriever:
         v = np.asarray(list(self._embedder.embed([text]))[0], dtype=np.float32)
         return v / (np.linalg.norm(v) + 1e-9)
 
-    def search(self, query, k=None):
+    def search(self, query, k=None, scope="all"):
+        """scope: all=正文+设定, novel=仅正文(+摘要), lore=仅设定"""
         k = k or self.top_k
         qv = self._embed(query)
         qt = bigram_tokens(query)
         hits = []
-        if "novel" in self.stores:
-            hits.extend(self.stores["novel"].search(qv, qt, k))
-        if "lore" in self.stores:
+        if scope in ("all", "novel") and "novel" in self.stores:
+            merged = list(self.stores["novel"].search(qv, qt, k))
+            if "novel_sum" in self.stores:
+                seen = {(h.get("vol"), h.get("chapter")) for h in merged}
+                for h in self.stores["novel_sum"].search(qv, qt, k):
+                    key = (h.get("vol"), h.get("chapter"))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    h["via_summary"] = True
+                    merged.append(h)
+            merged.sort(key=lambda h: -h.get("_rrf", 0))
+            hits.extend(merged[:k])
+        if scope in ("all", "lore") and "lore" in self.stores:
             lore_hits = self.stores["lore"].search(qv, qt, k)
             if lore_hits:
                 hits = hits[: max(0, k - 1)] + [lore_hits[0]]
@@ -112,11 +129,13 @@ def format_source(h):
             "chapter": h.get("chapter"), "vol": h.get("vol"),
             "title": h.get("title"), "excerpt": excerpt,
         }
+    tag = "（摘要命中）" if h.get("via_summary") else ""
     return {
         "type": "novel",
-        "label": f"{h.get('vol')}·第{h.get('chapter')}章·{h.get('title')}",
+        "label": f"{h.get('vol')}·第{h.get('chapter')}章·{h.get('title')}{tag}",
         "chapter": h.get("chapter"), "vol": h.get("vol"),
         "title": h.get("title"), "excerpt": excerpt,
+        "via_summary": bool(h.get("via_summary")),
     }
 
 
@@ -148,12 +167,19 @@ def mock_answer(hits):
     return "\n".join(lines)
 
 
-def ask_llm(system, user, api_key, base_url, model):
+def ask_llm(system, user, api_key, base_url, model, history=None):
     from openai import OpenAI
     client = OpenAI(api_key=api_key, base_url=base_url)
+    messages = [{"role": "system", "content": system}]
+    for h in (history or [])[-8:]:
+        role = h.get("role")
+        content = str(h.get("content") or "")[:2000]
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user})
     resp = client.chat.completions.create(
         model=model,
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        messages=messages,
         temperature=0.4,
         max_tokens=1024,
     )

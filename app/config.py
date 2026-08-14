@@ -19,7 +19,7 @@ MODEL_CACHE = BASE / os.getenv("RAG_MODEL_CACHE_DIR", "model_cache")
 
 def _set_env_var(name: str, value: str) -> None:
     """写回 .env（替换或追加），并同步内存。"""
-    global KEY, MODEL
+    global KEY, MODEL, DATA_DIR
     lines = []
     if ENV_FILE.exists():
         lines = ENV_FILE.read_text(encoding="utf-8").splitlines()
@@ -36,6 +36,8 @@ def _set_env_var(name: str, value: str) -> None:
         KEY = value.strip()
     elif name == "DEEPSEEK_MODEL":
         MODEL = value.strip()
+    elif name == "RAG_DATA_DIR":
+        DATA_DIR = BASE / value.strip()
 
 
 def set_api_key(key: str) -> None:
@@ -44,3 +46,18 @@ def set_api_key(key: str) -> None:
 
 def set_model(model: str) -> None:
     _set_env_var("DEEPSEEK_MODEL", model.strip() or "deepseek-chat")
+
+
+# 检索模型选项：id -> 相对数据目录
+DATA_DIR_OPTIONS = {
+    "small": "data",
+    "m3": "data_m3",
+    "jina": "data_jina2",
+}
+
+
+def set_data_dir(key: str):
+    """按模型 id 切换数据目录并写回 .env；返回新 DATA_DIR。"""
+    rel = DATA_DIR_OPTIONS.get(key, key)
+    _set_env_var("RAG_DATA_DIR", rel)
+    return DATA_DIR

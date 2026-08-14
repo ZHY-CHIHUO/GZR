@@ -2,6 +2,7 @@
 """《蛊真人》RAG 本地网页服务。
 启动：uvicorn app.main:app --port 8000
 """
+import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,10 +18,14 @@ from .rag import Retriever, ask_llm, build_prompt, estimate_cost, format_source,
 retriever: Retriever | None = None
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
+def reload_retriever():
     global retriever
     retriever = Retriever(config.DATA_DIR, config.MODEL_CACHE, top_k=config.TOP_K)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    reload_retriever()
     yield
 
 
@@ -30,11 +35,14 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 class AskReq(BaseModel):
     question: str
+    scope: str = "all"          # all / novel / lore
+    history: list = []          # [{role, content}, ...]
 
 
 class SettingsReq(BaseModel):
     api_key: str | None = None
     model: str | None = None
+    embed_model: str | None = None   # small / m3 / jina
 
 
 class TestReq(BaseModel):
@@ -77,6 +85,7 @@ def health():
         "embed_model": retriever.model_name,
         "stores": {name: s.n for name, s in retriever.stores.items()},
         "top_k": config.TOP_K,
+        "data_dir": config.DATA_DIR.name,
     }
 
 
@@ -87,11 +96,11 @@ def ask(req: AskReq):
         return JSONResponse({"error": "问题不能为空"}, status_code=400)
     if retriever is None:
         return JSONResponse({"error": "检索库未加载"}, status_code=503)
-    hits = retriever.search(q)
+    hits = retriever.search(q, scope=req.scope)
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
     if config.KEY:
         try:
-            answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL)
+            answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
         except Exception as e:
             return JSONResponse({"error": f"AI 调用失败：{e}"}, status_code=502)
         mock = False
@@ -114,7 +123,16 @@ def save_settings(req: SettingsReq):
         config.set_api_key(req.api_key)
     if req.model is not None:
         config.set_model(req.model)
-    return {"ok": True, "has_key": bool(config.KEY), "model": config.MODEL}
+    if req.embed_model is not None:
+        config.set_data_dir(req.embed_model)
+        try:
+            reload_retriever()
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": f"模型切换失败：{e}"}, status_code=500)
+    return {
+        "ok": True, "has_key": bool(config.KEY), "model": config.MODEL,
+        "data_dir": str(config.DATA_DIR), "embed_model": str(config.DATA_DIR),
+    }
 
 
 @app.post("/api/settings/test")
@@ -138,6 +156,122 @@ def test_settings(req: TestReq):
         return {"ok": True, "models": names, "message": "连接成功"}
     except Exception as e:
         return {"ok": False, "error": str(e)[:300], "message": "连接失败"}
+
+
+# ---------- 检索模型选项 ----------
+
+@app.get("/api/models")
+def list_models():
+    import json as _json
+    results = {}
+    erp = Path(__file__).resolve().parent.parent / "eval_results.json"
+    if erp.is_file():
+        try:
+            results = _json.loads(erp.read_text(encoding="utf-8"))
+        except Exception:
+            results = {}
+    options = []
+    label_map = {
+        "data": "标准（bge-small-zh-v1.5，最快）",
+        "data_m3": "更准（BGE-M3 1024维）",
+        "data_jina2": "中文增强（jina-v2-base-zh）",
+    }
+    for key, rel in config.DATA_DIR_OPTIONS.items():
+        d = config.BASE / rel
+        info_p = d / "info.json"
+        if not info_p.is_file():
+            continue
+        try:
+            info = _json.loads(info_p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        ev = results.get(rel, {})
+        options.append({
+            "id": key, "dir": rel, "model": info.get("model", ""),
+            "label": label_map.get(rel, rel),
+            "dim": info.get("shapes", {}).get("novel", [0, 0])[1],
+            "count": info.get("n", 0),
+            "available": True,
+            "hit5": ev.get("hit5"), "avg_query_s": ev.get("avg_query_s"),
+            "current": rel == config.DATA_DIR.name,
+        })
+    return {"options": options, "current": config.DATA_DIR.name}
+
+
+# ---------- 百科与游戏 ----------
+
+_wiki = None
+_quiz = None
+
+
+def _load_content():
+    global _wiki, _quiz
+    if _wiki is None:
+        wp = config.BASE / "data" / "wiki.json"
+        if wp.is_file():
+            _wiki = json.loads(wp.read_text(encoding="utf-8"))
+        else:
+            _wiki = {}
+    if _quiz is None:
+        qp = config.BASE / "data" / "quiz.json"
+        if qp.is_file():
+            _quiz = json.loads(qp.read_text(encoding="utf-8"))
+        else:
+            _quiz = {"quiz": [], "riddles": {}}
+
+
+@app.get("/api/wiki")
+def wiki_all():
+    _load_content()
+    return {
+        "categories": {k: v for k, v in _wiki.items() if k != "其他"},
+        "other": _wiki.get("其他", []),
+        "stats": {k: len(v) for k, v in _wiki.items()},
+    }
+
+
+class QuizReq(BaseModel):
+    type: str = "mix"   # mix / gu / person / type
+    n: int = 10
+
+
+@app.post("/api/quiz")
+def quiz_pick(req: QuizReq):
+    import random as _rnd
+    _load_content()
+    pool = _quiz["quiz"]
+    if req.type == "gu":
+        pool = [x for x in pool if x["type"] == "蛊虫"]
+    elif req.type == "person":
+        pool = [x for x in pool if x["type"] == "人物"]
+    elif req.type == "type":
+        pool = [x for x in pool if x["type"] == "蛊虫类型"]
+    n = min(max(req.n, 1), 20)
+    picked = _rnd.sample(pool, min(n, len(pool)))
+    for i, p in enumerate(picked):
+        p = dict(p)
+        p["id"] = f"q{_rnd.randint(100000, 999999)}"
+        picked[i] = p
+    return {"questions": picked}
+
+
+class RiddleReq(BaseModel):
+    type: str = "gu"   # gu / person / item
+    n: int = 1
+
+
+@app.post("/api/riddle")
+def riddle_pick(req: RiddleReq):
+    import random as _rnd
+    _load_content()
+    pool = _quiz["riddles"].get(req.type, [])
+    n = min(max(req.n, 1), 5)
+    picked = _rnd.sample(pool, min(n, len(pool)))
+    for i, p in enumerate(picked):
+        p = dict(p)
+        p["id"] = f"r{_rnd.randint(100000, 999999)}"
+        picked[i] = p
+    return {"riddles": picked}
 
 
 # ---------- 阅读库 ----------
