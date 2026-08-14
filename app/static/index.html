@@ -3,84 +3,492 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>蛊真人 RAG 问答</title>
+<title>蛊真人 · 本地知识库</title>
 <style>
-  :root { --bg:#f5f3ee; --card:#fff; --ink:#2b2b2b; --muted:#8a8577; --accent:#7a5c3e; --accent2:#b08d57; }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); height:100vh; display:flex; flex-direction:column; }
-  header { background:var(--card); border-bottom:1px solid #e5e0d6; padding:12px 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-  header h1 { font-size:18px; }
-  #badge { font-size:12px; padding:3px 10px; border-radius:12px; }
-  #badge.ok { background:#e3f2e4; color:#2e7d32; }
-  #badge.no { background:#fdecea; color:#c62828; }
-  #banner { display:none; background:#fff8e1; color:#7a5c00; font-size:13px; padding:8px 20px; border-bottom:1px solid #f0e6c8; line-height:1.6; }
-  #chat { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
-  .msg { max-width:80%; padding:12px 16px; border-radius:12px; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
-  .user { align-self:flex-end; background:var(--accent2); color:#fff; }
-  .bot { align-self:flex-start; background:var(--card); border:1px solid #e5e0d6; }
-  .meta { font-size:12px; color:var(--muted); margin-top:8px; }
-  .src { display:inline-block; margin:2px 4px 2px 0; padding:2px 10px; border:1px solid #d8cfbc; border-radius:10px; font-size:12px; cursor:pointer; background:#faf7f0; }
-  .src:hover { background:#f0e9da; }
-  .excerpt { display:none; margin-top:6px; padding:8px; background:#faf7f0; border-radius:8px; font-size:12px; color:#555; white-space:pre-wrap; max-height:180px; overflow:auto; }
-  .src.open .excerpt { display:block; }
-  footer { background:var(--card); border-top:1px solid #e5e0d6; padding:12px 20px; display:flex; gap:10px; }
-  input { flex:1; padding:10px 14px; border:1px solid #d8cfbc; border-radius:8px; font-size:14px; outline:none; }
-  input:focus { border-color:var(--accent2); }
-  button { padding:10px 22px; background:var(--accent); color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:14px; }
-  button:disabled { opacity:.6; cursor:not-allowed; }
+:root{--bg:#f5f3ee;--card:#fff;--ink:#2b2b2b;--muted:#8a8577;--accent:#7a5c3e;--accent2:#b08d57;--line:#e5e0d6;--ok:#2e7d32;--warn:#8a6d1a;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);height:100vh;display:flex;flex-direction:column;}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.logo{font-size:17px;font-weight:700;letter-spacing:.5px;}
+nav{display:flex;gap:6px;}
+.tab{border:1px solid var(--line);background:#faf8f3;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--ink);}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.pill{margin-left:auto;font-size:12px;padding:4px 12px;border-radius:12px;}
+.pill.ok{background:#e3f2e4;color:var(--ok);}
+.pill.no{background:#fdecea;color:#c62828;}
+.pill.warn{background:#fff8e1;color:var(--warn);}
+main{flex:1;display:flex;flex-direction:column;min-height:0;}
+.panel{flex:1;display:flex;flex-direction:column;min-height:0;}
+[hidden]{display:none !important;}
+/* ---- 问答 ---- */
+#chat{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
+.msg{max-width:82%;padding:12px 16px;border-radius:12px;line-height:1.75;white-space:pre-wrap;word-break:break-word;font-size:14px;}
+.user{align-self:flex-end;background:var(--accent2);color:#fff;}
+.bot{align-self:flex-start;background:var(--card);border:1px solid var(--line);}
+.hint-bot{align-self:flex-start;background:#fff8e1;border:1px solid #f0e6c8;color:#6b5310;border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.7;max-width:82%;}
+.hint-bot button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px;margin-left:8px;}
+.meta{font-size:12px;color:var(--muted);margin-top:8px;}
+.src-card{margin-top:6px;border:1px solid var(--line);border-radius:10px;background:#faf8f3;padding:8px 10px;font-size:12px;}
+.src-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.src-label{font-weight:600;color:var(--accent);}
+.src-btn{border:1px solid #d8cfbc;background:#fff;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;color:var(--ink);}
+.src-btn:hover{background:#f0e9da;}
+.src-excerpt{display:none;margin-top:6px;padding:8px;background:#fff;border-radius:6px;color:#555;white-space:pre-wrap;max-height:150px;overflow:auto;font-size:12px;}
+.src-card.open .src-excerpt{display:block;}
+#suggest{display:flex;gap:8px;flex-wrap:wrap;padding:0 20px 10px;}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:5px 12px;font-size:12px;cursor:pointer;color:#555;}
+.chip:hover{border-color:var(--accent2);color:var(--accent);}
+footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:12px 20px;display:flex;gap:10px;}
+#q{flex:1;padding:10px 14px;border:1px solid #d8cfbc;border-radius:8px;font-size:14px;outline:none;}
+#q:focus{border-color:var(--accent2);}
+#send{padding:10px 22px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;}
+#send:disabled{opacity:.6;cursor:not-allowed;}
+/* ---- 阅读 ---- */
+.read-tabs{display:flex;gap:6px;padding:12px 20px 0;flex-wrap:wrap;}
+.rtab{border:1px solid var(--line);background:#faf8f3;padding:6px 16px;border-radius:8px;cursor:pointer;font-size:14px;}
+.rtab.active{background:var(--accent2);color:#fff;border-color:var(--accent2);}
+.read-pane{flex:1;display:flex;min-height:0;padding:14px 20px 20px;gap:14px;}
+#read-novel .toc-pane{width:300px;min-width:240px;border:1px solid var(--line);border-radius:10px;background:var(--card);overflow-y:auto;padding:8px;}
+.toc-vol{font-size:13px;font-weight:700;padding:8px 10px;cursor:pointer;border-radius:6px;}
+.toc-vol:hover{background:#f5f0e6;}
+.toc-vol.open{color:var(--accent);}
+.toc-chapters{display:none;padding-left:12px;}
+.toc-vol.open .toc-chapters{display:block;}
+.ch-item{padding:3px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ch-item:hover{background:#f5f0e6;color:var(--accent);}
+.ch-item.cur{background:#f0e9da;color:var(--accent);font-weight:600;}
+#read-novel .text-pane{flex:1;border:1px solid var(--line);border-radius:10px;background:var(--card);overflow-y:auto;padding:20px 28px;}
+.ch-title{font-size:19px;font-weight:700;margin-bottom:16px;text-align:center;}
+.ch-nav{display:flex;justify-content:space-between;margin-top:20px;gap:10px;}
+.ch-nav button{border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:13px;}
+.ch-nav button:hover{background:#f0e9da;}
+.ch-text p{margin:0 0 10px;line-height:2;text-indent:2em;font-size:15px;}
+.pdf-list{display:flex;flex-direction:column;gap:8px;width:280px;min-width:220px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:10px;}
+.pdf-item{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px;cursor:pointer;}
+.pdf-item:hover{background:#f5f0e6;}
+.pdf-item.active{background:#f0e9da;border-color:var(--accent2);}
+.pdf-view{flex:1;border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden;}
+.pdf-view iframe{width:100%;height:100%;border:none;}
+.lore-pane{flex:1;display:flex;flex-direction:column;min-height:0;}
+.lore-frame{flex:1;border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden;min-height:0;}
+.lore-frame iframe{width:100%;height:100%;border:none;}
+.dl-btn{margin-top:10px;align-self:flex-start;border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;color:var(--ink);text-decoration:none;}
+.dl-btn:hover{background:#f0e9da;}
+.empty{padding:40px;text-align:center;color:var(--muted);font-size:14px;}
+/* ---- 设置 ---- */
+.settings-wrap{max-width:720px;width:100%;margin:0 auto;padding:24px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px;}
+.card{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:18px 20px;}
+.card h3{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.card .step-no{background:var(--accent2);color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;}
+.card p, .card li{font-size:13px;line-height:1.8;color:#444;}
+.card ul{padding-left:18px;}
+input[type=password], input[type=text]{width:100%;padding:9px 12px;border:1px solid #d8cfbc;border-radius:8px;font-size:13px;margin-top:8px;outline:none;}
+input:focus{border-color:var(--accent2);}
+.btn{border:none;border-radius:8px;padding:9px 18px;font-size:13px;cursor:pointer;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-ghost{border:1px solid var(--line);background:#faf8f3;color:var(--ink);}
+.btn-ghost:hover{background:#f0e9da;}
+.result{margin-top:10px;font-size:13px;line-height:1.7;}
+.result.ok{color:var(--ok);}
+.result.err{color:#c62828;}
+/* ---- 弹窗 ---- */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--card);border-radius:14px;max-width:640px;width:100%;max-height:84vh;display:flex;flex-direction:column;overflow:hidden;}
+.modal-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--line);}
+.modal-head h2{font-size:16px;}
+.modal-x{border:none;background:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:18px 22px;overflow-y:auto;font-size:14px;line-height:1.9;}
+.modal-body h4{font-size:14px;margin:12px 0 6px;color:var(--accent);}
+.modal-body ol{padding-left:20px;}
+.modal-body li{margin:4px 0;}
+.modal-body code{background:#f5f0e6;padding:1px 6px;border-radius:4px;font-size:12px;}
+.chapter-text p{margin:0 0 10px;line-height:2;text-indent:2em;font-size:14px;}
+mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
+/* toast */
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#333;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;z-index:99;pointer-events:none;max-width:80%;}
+#toast.show{opacity:1;}
 </style>
 </head>
 <body>
 <header>
-  <h1>📜 蛊真人 RAG</h1>
-  <span id="badge" class="no">检测中…</span>
+  <div class="logo">📜 蛊真人 · 本地知识库</div>
+  <nav>
+    <button class="tab active" data-tab="chat">💬 问答</button>
+    <button class="tab" data-tab="read">📖 阅读</button>
+    <button class="tab" data-tab="settings">⚙️ 设置</button>
+  </nav>
+  <span id="status" class="pill warn">检测中…</span>
 </header>
-<div id="banner"></div>
-<div id="chat">
-  <div class="msg bot">你好，我是《蛊真人》专属问答助手（本地 RAG，双库：2334 章正文 + 设定合集）。问关于剧情、人物、蛊虫、设定的问题吧，例如「白玉蛊是怎么炼成的」。</div>
+
+<main>
+  <!-- 问答 -->
+  <section id="tab-chat" class="panel">
+    <div id="chat"></div>
+    <div id="suggest"></div>
+    <footer class="chat-bar">
+      <input id="q" placeholder="输入问题，回车发送" autocomplete="off">
+      <button id="send">发送</button>
+    </footer>
+  </section>
+
+  <!-- 阅读 -->
+  <section id="tab-read" class="panel" hidden>
+    <div class="read-tabs">
+      <button class="rtab active" data-rt="novel">📄 原版</button>
+      <button class="rtab" data-rt="pdf">🖼️ 插图版</button>
+      <button class="rtab" data-rt="rz">📜 人祖传</button>
+      <button class="rtab" data-rt="lore">📚 资料合集</button>
+    </div>
+    <div id="read-novel" class="read-pane">
+      <div class="toc-pane"><div class="empty">目录加载中…</div></div>
+      <div class="text-pane"><div class="empty">从左侧选择章节开始阅读</div></div>
+    </div>
+    <div id="read-pdf" class="read-pane" hidden><div class="empty">加载中…</div></div>
+    <div id="read-rz" class="read-pane" hidden><div class="empty">加载中…</div></div>
+    <div id="read-lore" class="read-pane" hidden>
+      <div class="lore-pane">
+        <div class="lore-frame"><iframe src="/api/lore/html"></iframe></div>
+        <a class="dl-btn" href="/api/lore/download">⬇ 下载 docx 原件</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 设置 -->
+  <section id="tab-settings" class="panel" hidden>
+    <div class="settings-wrap">
+      <div class="card">
+        <h3><span class="step-no">1</span> 获取 DeepSeek API Key（教程）</h3>
+        <p>问答功能由 DeepSeek 大模型驱动，需要你自己的 API Key（普通手机号即可注册，按量计费，每次问答约 1~2 分钱）。</p>
+        <br><button class="btn btn-ghost" onclick="openTutorial()">📖 查看教程：如何获取 API Key</button>
+      </div>
+      <div class="card">
+        <h3><span class="step-no">2</span> 填入你的 API Key</h3>
+        <input type="password" id="api-key" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off">
+        <div class="result" id="key-result"></div>
+        <br>
+        <button class="btn btn-primary" onclick="saveAndTest()">保存并测试连接</button>
+        <button class="btn btn-ghost" onclick="clearKey()">清除 Key</button>
+      </div>
+      <div class="card">
+        <h3><span class="step-no">3</span> 模型设置（可选）</h3>
+        <p>默认 <code>deepseek-chat</code>（性价比最高）；追求更强推理可换 <code>deepseek-reasoner</code>，但更贵更慢。</p>
+        <input type="text" id="model" placeholder="deepseek-chat" autocomplete="off">
+        <br><button class="btn btn-ghost" onclick="saveModel()" style="margin-top:10px">保存模型</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 教程弹窗 -->
+<div class="modal-bg" id="tutorial-modal">
+  <div class="modal">
+    <div class="modal-head"><h2>如何获取 DeepSeek API Key</h2><button class="modal-x" onclick="closeModal('tutorial-modal')">×</button></div>
+    <div class="modal-body">
+      <h4>什么是 API Key？</h4>
+      <p>API Key 相当于你的「AI 通行证」。本应用用它调用 DeepSeek 的大模型来生成回答，费用从你的 DeepSeek 账户余额里扣（每次问答约 1~2 分钱）。</p>
+      <h4>获取步骤</h4>
+      <ol>
+        <li>打开 DeepSeek 开放平台：<code>https://platform.deepseek.com</code>（电脑浏览器，国内可直接访问）</li>
+        <li>点击右上角「注册 / 登录」，用手机号或邮箱完成注册</li>
+        <li>登录后，左侧菜单找到 <b>「API Keys」</b>，点击进入</li>
+        <li>点击 <b>「创建 API Key」</b>，随便填个名字（比如 gzr），点创建</li>
+        <li>创建后立刻 <b>复制</b> 那串以 <code>sk-</code> 开头的字符串（⚠️ 只显示这一次，务必先复制保存）</li>
+        <li>（可选）在「费用」页 <b>充值</b>：新账号通常有赠送额度；用完再充，最低 ¥10 能用很久</li>
+        <li>回到本应用「设置」页，把复制的 Key 粘贴进输入框，点 <b>「保存并测试连接」</b></li>
+        <li>显示「连接成功」后，去「问答」页提问即可 🎉</li>
+      </ol>
+      <h4>注意事项</h4>
+      <ul>
+        <li>Key 只保存在<b>本机</b>的 <code>.env</code> 文件里，不会上传到任何地方，请勿泄露给他人</li>
+        <li>不配置 Key 也能用：问答页会显示「检索测试模式」，只能看到检索到的章节，没有 AI 回答</li>
+        <li>官方价格与说明见 <code>https://api-docs.deepseek.com</code></li>
+      </ul>
+    </div>
+  </div>
 </div>
-<footer>
-  <input id="q" placeholder="输入问题，回车发送" autofocus />
-  <button id="send">发送</button>
-</footer>
+
+<!-- 章节阅读弹窗（来源定位） -->
+<div class="modal-bg" id="chapter-modal">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-head"><h2 id="cm-title">章节</h2><button class="modal-x" onclick="closeModal('chapter-modal')">×</button></div>
+    <div class="modal-body"><div id="cm-text" class="chapter-text"><div class="empty">加载中…</div></div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
 <script>
-const chat = document.getElementById('chat'), q = document.getElementById('q'),
-      send = document.getElementById('send'), badge = document.getElementById('badge'), banner = document.getElementById('banner');
-function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-async function health(){
+var HEALTH = null;
+var LIB = null;
+var CUR_VOL = null;
+var CUR_CH = 0;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){ t.classList.remove('show'); }, 2600); }
+function closeModal(id){ $(id).classList.remove('show'); }
+
+/* ---------- 标签页 ---------- */
+document.querySelectorAll('.tab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    ['chat','read','settings'].forEach(function(t){ $('tab-'+t).hidden = (t !== btn.dataset.tab); });
+    if (btn.dataset.tab==='read' && !LIB) loadLibrary();
+  });
+});
+document.querySelectorAll('.rtab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.rtab').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    ['novel','pdf','rz','lore'].forEach(function(t){ $('read-'+t).hidden = (t !== btn.dataset.rt); });
+    if ((btn.dataset.rt==='pdf'||btn.dataset.rt==='rz') && !$('read-pdf').dataset.loaded) loadPdfs();
+  });
+});
+
+/* ---------- 状态 ---------- */
+function updateStatus(){
+  var pill = $('status');
+  if (!HEALTH || !HEALTH.ok){ pill.className='pill no'; pill.textContent='服务未连接'; return; }
+  if (HEALTH.has_key){ pill.className='pill ok'; pill.textContent='已连接 AI'; }
+  else { pill.className='pill no'; pill.textContent='未连接 AI · 去设置'; }
+  renderGuide();
+}
+function renderGuide(){
+  var chat = $('chat');
+  var exists = !!$('no-key-guide');
+  if (HEALTH && HEALTH.ok && !HEALTH.has_key && !exists){
+    var d = document.createElement('div');
+    d.id='no-key-guide'; d.className='hint-bot';
+    d.innerHTML = '🔌 还没连接 AI：现在只能看到「检索结果」，不能生成回答。' +
+      '<button onclick="switchTab(\'settings\')">去设置连接 AI</button>';
+    chat.insertBefore(d, chat.firstChild);
+  }
+  if (HEALTH && HEALTH.ok && HEALTH.has_key && exists){ var g=$('no-key-guide'); if(g) g.remove(); }
+}
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===name); });
+  ['chat','read','settings'].forEach(function(t){ $('tab-'+t).hidden = (t !== name); });
+  if (name==='read' && !LIB) loadLibrary();
+}
+async function refreshHealth(){
+  try { HEALTH = await (await fetch('/api/health')).json(); }
+  catch(e){ HEALTH = null; }
+  updateStatus();
+  if (HEALTH && HEALTH.ok){
+    $('api-key').value = HEALTH.has_key ? 'sk-已配置（留空则不改动）' : '';
+    $('model').value = HEALTH.model || 'deepseek-chat';
+  }
+}
+
+/* ---------- 问答 ---------- */
+var SUGGEST = ['白玉蛊是怎么炼成的','十大尊者都有谁','方源为什么能重生','监天塔是什么','幽魂魔尊是什么人','春秋蝉有什么用'];
+function renderSuggest(){
+  var box = $('suggest');
+  SUGGEST.forEach(function(s){
+    var c = document.createElement('span');
+    c.className='chip'; c.textContent='💡 '+s;
+    c.onclick = function(){ $('q').value=s; ask(); };
+    box.appendChild(c);
+  });
+}
+function addMsg(html, cls){
+  var d = document.createElement('div'); d.className='msg '+cls; d.innerHTML = html;
+  $('chat').appendChild(d); $('chat').scrollTop = $('chat').scrollHeight; return d;
+}
+function renderSources(sources){
+  var html = '<div class="meta">依据来源（点击可展开片段 / 阅读原文 / 打开本地文件）</div>';
+  sources.forEach(function(s){
+    var ex = (s.excerpt||'').trim();
+    html += '<div class="src-card">' +
+      '<div class="src-head"><span class="src-label">'+esc(s.label)+'</span>' +
+      '<button class="src-btn" onclick="readChapter(\''+esc(s.vol)+'\','+s.chapter+',\''+esc((s.excerpt||'').slice(0,24))+'\')">📖 阅读原文</button>' +
+      (s.type==='novel' ? '<button class="src-btn" onclick="locateFile(\''+esc(s.vol)+'\','+s.chapter+')">📂 打开本地文件</button>' : '') +
+      (ex ? '<button class="src-btn" onclick="this.parentNode.parentNode.classList.toggle(\'open\')">🔍 展开片段</button>' : '') +
+      '</div>' + (ex ? '<div class="src-excerpt">'+esc(ex)+'</div>' : '') + '</div>';
+  });
+  return html;
+}
+async function ask(){
+  var question = $('q').value.trim(); if (!question) return;
+  $('q').value=''; $('send').disabled = true;
+  addMsg(esc(question), 'user');
+  var d = addMsg('思考中…', 'bot');
   try {
-    const h = await (await fetch('/api/health')).json();
-    if (h.ok) {
-      badge.className = h.has_key ? 'ok' : 'no';
-      badge.textContent = h.has_key ? 'DeepSeek Key 已配置' : '未配置 API Key（测试模式）';
-      if (!h.has_key) {
-        banner.style.display = 'block';
-        banner.textContent = '未配置 DEEPSEEK_API_KEY：当前为检索测试模式，只展示检索到的来源。把 .env.example 复制为 .env 并填入你自己的 key，重启服务即可启用 AI 回答。';
+    var r = await fetch('/api/ask', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({question: question})});
+    var j = await r.json();
+    if (j.error){ d.textContent = '出错了：' + j.error; return; }
+    var body = esc(j.answer);
+    if (j.mock){ body += '\n\n（当前为检索测试模式——配置 API Key 后可生成真正的 AI 回答）'; }
+    var cost = j.mock ? '' : '<div class="meta">本次约 ¥'+j.cost_rmb+'</div>';
+    d.innerHTML = body + renderSources(j.sources || []) + cost;
+  } catch(e){ d.textContent = '请求失败：'+e.message; }
+  finally { $('send').disabled = false; $('q').focus(); }
+}
+$('send').onclick = ask;
+$('q').addEventListener('keydown', function(e){ if (e.key==='Enter') ask(); });
+
+/* ---------- 来源 → 定位原文 ---------- */
+async function readChapter(vol, ch, excerptHint){
+  try {
+    var r = await fetch('/api/chapter?vol='+encodeURIComponent(vol)+'&chapter='+ch);
+    if (!r.ok){ toast('未找到该章节'); return; }
+    var j = await r.json();
+    $('cm-title').textContent = vol + ' · 第' + (ch||'序') + '章 · ' + j.title;
+    var paras = (j.text||'').split('\n').filter(function(x){ return x.trim(); });
+    var html = paras.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
+    var box = $('cm-text'); box.innerHTML = html;
+    if (excerptHint){
+      var idx = (j.text||'').indexOf(excerptHint);
+      if (idx >= 0){
+        var before = esc((j.text||'').slice(0, idx)).split('\n').filter(function(x){ return x.trim(); }).length;
+        // 高亮提示词所在段
+        var ps = box.querySelectorAll('p');
+        var acc = 0;
+        for (var i=0;i<ps.length;i++){
+          acc += ps[i].textContent.length + 1;
+          if (acc > idx){ ps[i].innerHTML = ps[i].innerHTML.replace(esc(excerptHint), '<mark>'+esc(excerptHint)+'</mark>'); box.scrollTop = ps[i].offsetTop - 20; break; }
+        }
       }
     }
-  } catch(e){ badge.textContent = '服务未连接'; }
+    $('chapter-modal').classList.add('show');
+  } catch(e){ toast('加载失败：'+e.message); }
 }
-function addMsg(html, cls){ const d = document.createElement('div'); d.className = 'msg ' + cls; d.innerHTML = html; chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d; }
-async function ask(){
-  const question = q.value.trim(); if (!question) return;
-  q.value = ''; send.disabled = true;
-  addMsg(esc(question), 'user');
-  const d = addMsg('思考中…', 'bot');
+async function locateFile(vol, ch){
   try {
-    const r = await fetch('/api/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({question}) });
-    const j = await r.json();
-    if (j.error) { d.textContent = '错误：' + j.error; return; }
-    const srcs = (j.sources || []).map(s =>
-      '<span class="src" onclick="this.classList.toggle(\'open\')">' + esc(s.label) +
-      (s.excerpt ? '<div class="excerpt">' + esc(s.excerpt) + '</div>' : '') + '</span>').join('');
-    const cost = j.mock ? '' : '<div class="meta">本次约 ¥' + j.cost_rmb + '</div>';
-    d.innerHTML = esc(j.answer) + '<div class="meta">依据来源（点击展开）</div>' + srcs + cost;
-  } catch(e){ d.textContent = '请求失败：' + e.message; }
-  finally { send.disabled = false; q.focus(); }
+    var r = await fetch('/api/locate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({vol: vol, chapter: ch})});
+    var j = await r.json();
+    if (j.ok){ toast('已用默认程序打开：' + j.path); }
+    else { toast('打开失败：' + (j.error||'文件不存在')); }
+  } catch(e){ toast('定位失败：'+e.message); }
 }
-send.onclick = ask;
-q.addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
-health();
+
+/* ---------- 阅读库 ---------- */
+async function loadLibrary(){
+  try {
+    var j = await (await fetch('/api/library')).json();
+    LIB = j;
+    var toc = $('read-novel').querySelector('.toc-pane');
+    toc.innerHTML = '';
+    j.volumes.forEach(function(v){
+      var volDiv = document.createElement('div');
+      volDiv.className = 'toc-vol';
+      volDiv.innerHTML = '▸ ' + esc(v.name) + '（' + v.chapters.length + ' 章）';
+      var list = document.createElement('div'); list.className='toc-chapters';
+      v.chapters.forEach(function(c){
+        var it = document.createElement('div');
+        it.className='ch-item';
+        it.textContent = (c.n ? ('第'+c.n+'章 ') : '') + c.title;
+        it.onclick = function(){ showChapter(v.name, c.n); };
+        list.appendChild(it);
+      });
+      volDiv.onclick = function(){ volDiv.classList.toggle('open'); };
+      volDiv.appendChild(list);
+      toc.appendChild(volDiv);
+    });
+    renderPdfLists(j.pdfs);
+  } catch(e){ toast('阅读库加载失败：'+e.message); }
+}
+async function showChapter(vol, ch){
+  CUR_VOL = vol; CUR_CH = ch;
+  try {
+    var j = await (await fetch('/api/chapter?vol='+encodeURIComponent(vol)+'&chapter='+ch)).json();
+    var pane = $('read-novel').querySelector('.text-pane');
+    var paras = (j.text||'').split('\n').filter(function(x){ return x.trim(); });
+    var title = (ch ? '第'+ch+'章 ' : '序 ') + j.title;
+    var html = '<div class="ch-title">'+esc(vol)+' · '+esc(title)+'</div>';
+    html += paras.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
+    var nav = '<div class="ch-nav"><button id="ch-prev">← 上一章</button><button id="ch-next">下一章 →</button></div>';
+    pane.innerHTML = html + nav; pane.scrollTop = 0;
+    $('ch-prev').onclick = function(){ stepChapter(-1); };
+    $('ch-next').onclick = function(){ stepChapter(1); };
+    // 目录高亮当前章
+    document.querySelectorAll('.ch-item').forEach(function(it){ it.classList.remove('cur'); });
+    var list = $('read-novel').querySelectorAll('.toc-vol');
+    for (var i=0;i<list.length;i++){
+      if (list[i].textContent.indexOf(vol)===0){
+        list[i].classList.add('open');
+        var items = list[i].querySelectorAll('.ch-item');
+        var target = items[ch-1]; if (target) target.classList.add('cur');
+        break;
+      }
+    }
+  } catch(e){ toast('章节加载失败：'+e.message); }
+}
+function stepChapter(delta){
+  if (!LIB || !CUR_VOL) return;
+  var vols = LIB.volumes.filter(function(v){ return v.name===CUR_VOL; });
+  if (!vols.length) return;
+  var chs = vols[0].chapters;
+  var idx = chs.findIndex(function(c){ return c.n===CUR_CH; });
+  var next = chs[idx+delta];
+  if (next) showChapter(CUR_VOL, next.n);
+  else toast(delta>0 ? '已是本卷最后一章' : '已是本卷第一章');
+}
+function renderPdfLists(pdfs){
+  var byGroup = {};
+  pdfs.forEach(function(p){ (byGroup[p.group]=byGroup[p.group]||[]).push(p); });
+  // 插图版
+  var pane = $('read-pdf');
+  pane.innerHTML = '<div class="pdf-list"></div><div class="pdf-view"><div class="empty">选择左侧 PDF 查看</div></div>';
+  var list = pane.querySelector('.pdf-list');
+  (byGroup['插图版']||[]).forEach(function(p){
+    var it = document.createElement('div'); it.className='pdf-item'; it.textContent = '🖼️ '+p.name;
+    it.onclick = function(){
+      list.querySelectorAll('.pdf-item').forEach(function(x){ x.classList.remove('active'); });
+      it.classList.add('active');
+      pane.querySelector('.pdf-view').innerHTML = '<iframe src="'+p.url+'"></iframe>';
+    };
+    list.appendChild(it);
+  });
+  if (!list.children.length) list.innerHTML = '<div class="empty">未找到插图版 PDF</div>';
+  // 人祖传
+  var rz = $('read-rz');
+  var rzPdf = (byGroup['人祖传']||[])[0];
+  rz.innerHTML = rzPdf
+    ? '<div class="pdf-view" style="flex:1"><iframe src="'+rzPdf.url+'"></iframe></div>'
+    : '<div class="empty">未找到人祖传 PDF</div>';
+  pane.dataset.loaded = '1';
+}
+
+/* ---------- 设置 ---------- */
+function openTutorial(){ $('tutorial-modal').classList.add('show'); }
+async function saveAndTest(){
+  var key = $('api-key').value.trim();
+  var result = $('key-result');
+  if (!key || key.indexOf('sk-已配置')===0){ toast('请先粘贴你的 API Key'); return; }
+  result.className='result'; result.textContent='正在测试连接…';
+  try {
+    var t = await (await fetch('/api/settings/test', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key})})).json();
+    if (t.ok){
+      await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key})});
+      result.className='result ok';
+      result.textContent = '✅ 连接成功！可用模型：' + (t.models||[]).join('、');
+      refreshHealth();
+    } else {
+      result.className='result err';
+      result.textContent = '❌ 连接失败：' + (t.error||t.message||'未知错误') + '（请检查 Key 是否完整、是否正确复制）';
+    }
+  } catch(e){ result.className='result err'; result.textContent='❌ 请求出错：'+e.message; }
+}
+async function clearKey(){
+  var result = $('key-result');
+  try {
+    await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: ''})});
+    $('api-key').value=''; result.className='result'; result.textContent='已清除 API Key';
+    refreshHealth();
+  } catch(e){ result.textContent='清除失败：'+e.message; }
+}
+async function saveModel(){
+  var m = $('model').value.trim() || 'deepseek-chat';
+  await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model: m})});
+  toast('模型已设为：' + m);
+}
+
+/* ---------- 启动 ---------- */
+renderSuggest();
+refreshHealth();
 </script>
 </body>
 </html>

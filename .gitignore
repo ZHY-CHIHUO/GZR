@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 .env
 model_cache/
+data_m3/
 .DS_Store

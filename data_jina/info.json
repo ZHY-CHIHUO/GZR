@@ -1,0 +1,16 @@
+{
+  "model": "BAAI/bge-small-zh-v1.5",
+  "shapes": {
+    "novel": [
+      2335,
+      512
+    ],
+    "lore": [
+      1334,
+      512
+    ]
+  },
+  "n": 3669,
+  "text_free": false,
+  "built_at": "2026-08-15 02:57:06"
+}

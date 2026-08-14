@@ -5,10 +5,12 @@
 
 ## 特性
 
-- 🔍 **混合检索**：BGE-M3 稠密向量 + BM25 关键词，RRF 融合（人名/蛊名专名命中率高）
-- 📚 **双知识库**：正文库（2334 章，一章一块）+ 设定库（蛊虫百科/人物图鉴/势力/仙蛊屋等）
-- 🌐 **本地网页**：FastAPI 单文件前端，答案带出处回链（点击可展开原文片段）
-- 💰 **省钱**：向量库已预建好（免费，BGE-M3 本地跑）；每次问答约 1~2 分钱；未配 Key 时自动进入“检索测试模式”
+- 🔍 **混合检索**：稠密向量 + BM25 关键词，RRF 融合（人名/蛊名专名命中率高）
+- 📚 **双知识库**：正文库（2334 章）+ 设定库（蛊虫百科/人物图鉴/势力/仙蛊屋等）
+- 📖 **内置阅读器**：原版小说（章节目录+全文）、插图版 PDF、人祖传、资料合集 docx 在线看
+- 🔗 **出处可定位**：答案的来源卡片可「阅读原文」（全文+高亮命中位置）、「打开本地文件」（直接打开对应 txt）
+- 🔌 **新手引导**：未配 Key 时引导去设置页，内置 DeepSeek API Key 获取教程，网页里直接粘贴 Key 保存并测试连接
+- 💰 **省钱**：向量库预建好（免费）；每次问答约 1~2 分钱；未配 Key 时自动进入“检索测试模式”
 
 ## 快速开始（3 分钟）
 
@@ -18,15 +20,15 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 
-# 2. 配置你自己的 API Key
-copy .env.example .env          # Windows
-#   然后编辑 .env，填入 DEEPSEEK_API_KEY=sk-xxx
-
-# 3. 启动（数据目录已随仓库提供）
+# 2. 启动（数据目录已随仓库提供）
 uvicorn app.main:app --port 8000
 
-# 4. 浏览器打开
+# 3. 浏览器打开
 #    http://localhost:8000
+
+# 4. 连接 AI（两种方式任选）
+#    ① 网页「设置」页 → 按内置教程获取 DeepSeek API Key → 粘贴保存并测试（推荐，免重启）
+#    ② 手动：copy .env.example .env → 编辑填入 DEEPSEEK_API_KEY=sk-xxx → 重启服务
 ```
 
 > 不填 Key 也能启动：页面显示“检索测试模式”，可看到每个问题检索到了哪些章节。
@@ -40,12 +42,15 @@ gu-zhen-ren-rag/
 │   ├── novel/               #   正文库：vectors.npy + meta.json（2335 条）
 │   └── lore/                #   设定库：vectors.npy + meta.json
 ├── app/
-│   ├── main.py              # FastAPI 服务
+│   ├── main.py              # FastAPI 服务（问答/设置/阅读库/文件定位接口）
 │   ├── rag.py               # 检索（RRF 融合）+ prompt 拼装 + DeepSeek 调用
-│   ├── config.py            # .env 配置
-│   └── static/index.html    # 聊天前端（单文件）
+│   ├── library.py           # 阅读库：小说目录/章节全文/PDF/资料合集 HTML
+│   ├── embed.py             # BGE-M3(ONNX) 嵌入器（可选升级）
+│   ├── config.py            # .env 配置（支持网页里保存 Key）
+│   └── static/index.html    # 前端（问答/阅读/设置 三栏，单文件）
 ├── scripts/
 │   ├── build_db.py          # 从原文重建向量库（可选）
+│   ├── build_db_m3.py       # 用 BGE-M3(ONNX) 重建（需先下载模型）
 │   └── eval_retrieval.py    # 检索评估（hit@k）
 ├── .env.example
 └── requirements.txt
@@ -86,7 +91,7 @@ python scripts/eval_retrieval.py   # 输出 15 个测试问题在 k=3/5/8 下的
 
 ## 成本参考（2026-08）
 
-- 建库：¥0（BGE-M3 本地向量化，已预建好随仓库分发）
+- 建库：¥0（本地向量化，已预建好随仓库分发；默认 bge-small-zh-v1.5，可换 BGE-M3）
 - 每次问答：约 1~2 分钱（deepseek-chat，3K 输入 + 0.8K 输出；命中缓存更低）
 - 开发调试（deepseek-v4-flash）：一个项目约 ¥5~15
 
