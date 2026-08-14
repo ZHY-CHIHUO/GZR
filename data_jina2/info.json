@@ -1,0 +1,16 @@
+{
+  "model": "jinaai/jina-embeddings-v2-base-zh",
+  "shapes": {
+    "novel": [
+      2335,
+      768
+    ],
+    "lore": [
+      1334,
+      768
+    ]
+  },
+  "n": 3669,
+  "text_free": false,
+  "built_at": "2026-08-15 06:21:07"
+}

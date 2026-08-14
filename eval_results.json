@@ -1,0 +1,20 @@
+{
+  "data": {
+    "model": "BAAI/bge-small-zh-v1.5",
+    "load_s": 7.6,
+    "hit3": 0.267,
+    "hit5": 0.367,
+    "hit8": 0.367,
+    "dense5": 0.233,
+    "avg_query_s": 0.019
+  },
+  "data_jina2": {
+    "model": "jinaai/jina-embeddings-v2-base-zh",
+    "load_s": 7.6,
+    "hit3": 0.4,
+    "hit5": 0.433,
+    "hit8": 0.433,
+    "dense5": 0.233,
+    "avg_query_s": 0.034
+  }
+}

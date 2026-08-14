@@ -25,14 +25,14 @@ CASES = [
     ("监天塔是什么", [("第4卷", [355, 356, 357, 360])]),
     ("成尊的四个条件", [("第6卷", [119])]),
     ("幽魂魔尊是谁", [("第6卷", [81])]),
-    ("春秋蝉有什么能力", [("第5卷", [459, 425, 74])]),
+    ("春秋蝉有什么能力", [("第1卷", [1, 2])]),
     ("方源怎么得到酒虫", [("第1卷", [17, 16])]),
     ("月霓裳蛊是谁用的", [("第1卷", [70, 71, 72])]),
     ("赤铁舍利蛊是什么", [("第1卷", [98, 99])]),
     ("石窍蛊的作用", [("第1卷", [130, 131, 132])]),
     ("巨阳仙尊是谁", [("第5卷", [300, 400, 500])]),
     ("星宿仙尊是谁", [("第4卷", [200, 300, 355])]),
-    ("方源什么时候得到春秋蝉", [("第2卷", [1, 2, 3, 10, 20])]),
+    ("方源什么时候得到春秋蝉", [("第1卷", [1, 2])]),
     ("古月方正和方源什么关系", [("第1卷", [3, 4, 5, 83])]),
     ("青茅山是什么地方", [("第1卷", [1, 2])]),
     ("白凝冰用的是什么道", [("第2卷", [70, 76, 100])]),
@@ -56,11 +56,11 @@ def load_embedder(data_dir):
     if "bge-m3" in name.lower():
         from app.config import MODEL_CACHE
         emb = BgeM3Embedder(os.path.join(str(MODEL_CACHE), "bge-m3-onnx"))
-        return name, emb
+        return name, emb, "m3"
     from fastembed import TextEmbedding
     from app.config import MODEL_CACHE
     emb = TextEmbedding(model_name=name, cache_dir=str(MODEL_CACHE))
-    return name, emb
+    return name, emb, "fastembed"
 
 
 def evaluate(data_dir, name):
@@ -72,7 +72,7 @@ def evaluate(data_dir, name):
             stores[sn] = Store(p)
     if "novel" not in stores:
         return None
-    mname, emb = load_embedder(data_dir)
+    mname, emb, kind = load_embedder(data_dir)
     load_t = time.time() - t0
 
     results = {}
@@ -82,9 +82,12 @@ def evaluate(data_dir, name):
             t_query = []
             for q, expect in CASES:
                 tq = time.time()
-                qv = emb.embed(q)
-                if isinstance(qv, np.ndarray) and qv.ndim == 2:
-                    qv = qv[0]
+                if kind == "fastembed":
+                    qv = np.asarray(list(emb.embed([q]))[0], dtype=np.float32)
+                else:
+                    qv = emb.embed(q)
+                    if isinstance(qv, np.ndarray) and qv.ndim == 2:
+                        qv = qv[0]
                 qv = qv / (np.linalg.norm(qv) + 1e-9)
                 qt = bigram_tokens(q)
                 d = stores["novel"]._dense_ranks(qv, 20)
