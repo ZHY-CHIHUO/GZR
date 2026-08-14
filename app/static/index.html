@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>蛊真人 RAG 问答</title>
+<style>
+  :root { --bg:#f5f3ee; --card:#fff; --ink:#2b2b2b; --muted:#8a8577; --accent:#7a5c3e; --accent2:#b08d57; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); height:100vh; display:flex; flex-direction:column; }
+  header { background:var(--card); border-bottom:1px solid #e5e0d6; padding:12px 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { font-size:18px; }
+  #badge { font-size:12px; padding:3px 10px; border-radius:12px; }
+  #badge.ok { background:#e3f2e4; color:#2e7d32; }
+  #badge.no { background:#fdecea; color:#c62828; }
+  #banner { display:none; background:#fff8e1; color:#7a5c00; font-size:13px; padding:8px 20px; border-bottom:1px solid #f0e6c8; line-height:1.6; }
+  #chat { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .msg { max-width:80%; padding:12px 16px; border-radius:12px; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
+  .user { align-self:flex-end; background:var(--accent2); color:#fff; }
+  .bot { align-self:flex-start; background:var(--card); border:1px solid #e5e0d6; }
+  .meta { font-size:12px; color:var(--muted); margin-top:8px; }
+  .src { display:inline-block; margin:2px 4px 2px 0; padding:2px 10px; border:1px solid #d8cfbc; border-radius:10px; font-size:12px; cursor:pointer; background:#faf7f0; }
+  .src:hover { background:#f0e9da; }
+  .excerpt { display:none; margin-top:6px; padding:8px; background:#faf7f0; border-radius:8px; font-size:12px; color:#555; white-space:pre-wrap; max-height:180px; overflow:auto; }
+  .src.open .excerpt { display:block; }
+  footer { background:var(--card); border-top:1px solid #e5e0d6; padding:12px 20px; display:flex; gap:10px; }
+  input { flex:1; padding:10px 14px; border:1px solid #d8cfbc; border-radius:8px; font-size:14px; outline:none; }
+  input:focus { border-color:var(--accent2); }
+  button { padding:10px 22px; background:var(--accent); color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:14px; }
+  button:disabled { opacity:.6; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📜 蛊真人 RAG</h1>
+  <span id="badge" class="no">检测中…</span>
+</header>
+<div id="banner"></div>
+<div id="chat">
+  <div class="msg bot">你好，我是《蛊真人》专属问答助手（本地 RAG，双库：2334 章正文 + 设定合集）。问关于剧情、人物、蛊虫、设定的问题吧，例如「白玉蛊是怎么炼成的」。</div>
+</div>
+<footer>
+  <input id="q" placeholder="输入问题，回车发送" autofocus />
+  <button id="send">发送</button>
+</footer>
+<script>
+const chat = document.getElementById('chat'), q = document.getElementById('q'),
+      send = document.getElementById('send'), badge = document.getElementById('badge'), banner = document.getElementById('banner');
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+async function health(){
+  try {
+    const h = await (await fetch('/api/health')).json();
+    if (h.ok) {
+      badge.className = h.has_key ? 'ok' : 'no';
+      badge.textContent = h.has_key ? 'DeepSeek Key 已配置' : '未配置 API Key（测试模式）';
+      if (!h.has_key) {
+        banner.style.display = 'block';
+        banner.textContent = '未配置 DEEPSEEK_API_KEY：当前为检索测试模式，只展示检索到的来源。把 .env.example 复制为 .env 并填入你自己的 key，重启服务即可启用 AI 回答。';
+      }
+    }
+  } catch(e){ badge.textContent = '服务未连接'; }
+}
+function addMsg(html, cls){ const d = document.createElement('div'); d.className = 'msg ' + cls; d.innerHTML = html; chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d; }
+async function ask(){
+  const question = q.value.trim(); if (!question) return;
+  q.value = ''; send.disabled = true;
+  addMsg(esc(question), 'user');
+  const d = addMsg('思考中…', 'bot');
+  try {
+    const r = await fetch('/api/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({question}) });
+    const j = await r.json();
+    if (j.error) { d.textContent = '错误：' + j.error; return; }
+    const srcs = (j.sources || []).map(s =>
+      '<span class="src" onclick="this.classList.toggle(\'open\')">' + esc(s.label) +
+      (s.excerpt ? '<div class="excerpt">' + esc(s.excerpt) + '</div>' : '') + '</span>').join('');
+    const cost = j.mock ? '' : '<div class="meta">本次约 ¥' + j.cost_rmb + '</div>';
+    d.innerHTML = esc(j.answer) + '<div class="meta">依据来源（点击展开）</div>' + srcs + cost;
+  } catch(e){ d.textContent = '请求失败：' + e.message; }
+  finally { send.disabled = false; q.focus(); }
+}
+send.onclick = ask;
+q.addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+health();
+</script>
+</body>
+</html>
