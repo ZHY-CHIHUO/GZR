@@ -50,6 +50,18 @@ CASES = [
 ]
 
 
+# 若存在校准测试集（{DATA_DIR}/testset.json）则优先使用
+from app.config import DATA_DIR as _DATA_DIR
+_ts_path = os.path.join(str(_DATA_DIR), "testset.json")
+if os.path.isfile(_ts_path):
+    try:
+        _ts = json.load(open(_ts_path, encoding="utf-8"))["cases"]
+        CASES = [(x["q"], [tuple(g) for g in x["expect"]]) for x in _ts]
+        print(f"[testset] 使用校准测试集 {len(CASES)} 题")
+    except Exception:
+        pass
+
+
 def load_embedder(data_dir):
     info = json.load(open(os.path.join(data_dir, "info.json"), encoding="utf-8"))
     name = info["model"]

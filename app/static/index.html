@@ -105,6 +105,9 @@ input:focus{border-color:var(--accent2);}
 .modal-body code{background:#f5f0e6;padding:1px 6px;border-radius:4px;font-size:12px;}
 .chapter-text p{margin:0 0 10px;line-height:2;text-indent:2em;font-size:14px;}
 mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
+.cite{color:#b08d57;font-weight:700;cursor:pointer;border-bottom:1px dotted #b08d57;}
+.cite:hover{background:#f7efdd;}
+.src-card.flash{border-color:#b08d57;background:#f7efdd;box-shadow:0 0 0 2px rgba(176,141,87,.35);}
 /* toast */
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#333;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;z-index:99;pointer-events:none;max-width:80%;}
 #toast.show{opacity:1;}
@@ -407,15 +410,17 @@ function addMsg(html, cls){
   var d = document.createElement('div'); d.className='msg '+cls; d.innerHTML = html;
   $('chat').appendChild(d); $('chat').scrollTop = $('chat').scrollHeight; return d;
 }
+function attrEsc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function renderSources(sources){
   var html = '<div class="meta">依据来源（点击可展开片段 / 阅读原文 / 打开本地文件）</div>';
   sources.forEach(function(s){
     var ex = (s.excerpt||'').trim();
-    html += '<div class="src-card">' +
+    var exHint = ex ? attrEsc(ex.slice(0,24)) : '';
+    html += '<div class="src-card" data-n="'+sources.indexOf(s)+'">' +
       '<div class="src-head"><span class="src-label">'+esc(s.label)+'</span>' +
-      '<button class="src-btn" onclick="readChapter(\''+esc(s.vol)+'\','+s.chapter+',\''+esc((s.excerpt||'').slice(0,24))+'\')">📖 阅读原文</button>' +
-      (s.type==='novel' ? '<button class="src-btn" onclick="locateFile(\''+esc(s.vol)+'\','+s.chapter+')">📂 打开本地文件</button>' : '') +
-      (ex ? '<button class="src-btn" onclick="this.parentNode.parentNode.classList.toggle(\'open\')">🔍 展开片段</button>' : '') +
+      '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'" data-ex="'+exHint+'">📖 阅读原文</button>' +
+      (s.type==='novel' ? '<button class="src-btn" data-act="locate" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">📂 打开本地文件</button>' : '') +
+      (ex ? '<button class="src-btn" data-act="toggle">🔍 展开片段</button>' : '') +
       '</div>' + (ex ? '<div class="src-excerpt">'+esc(ex)+'</div>' : '') + '</div>';
   });
   return html;
@@ -431,7 +436,9 @@ async function ask(){
       body: JSON.stringify({question: question, scope: $('scope').value, history: HISTORY.slice(0, -1)})});
     var j = await r.json();
     if (j.error){ d.textContent = '出错了：' + j.error; return; }
-    var body = esc(j.answer);
+    var body = esc(j.answer).replace(/\[(\d{1,2})\]/g, function(m, n){
+      return '<span class="cite" data-cite="'+n+'" title="点击跳转到对应来源">['+n+']</span>';
+    });
     if (j.mock){ body += '\n\n（当前为检索测试模式——配置 API Key 后可生成真正的 AI 回答）'; }
     var cost = j.mock ? '' : '<div class="meta">本次约 ¥'+j.cost_rmb+'</div>';
     d.innerHTML = body + renderSources(j.sources || []) + cost;
@@ -441,6 +448,35 @@ async function ask(){
 }
 $('send').onclick = ask;
 $('q').addEventListener('keydown', function(e){ if (e.key==='Enter') ask(); });
+
+/* ---------- 来源按钮事件委托 + 引用编号跳转 ---------- */
+$('chat').addEventListener('click', function(ev){
+  var el = ev.target;
+  if (el.classList && el.classList.contains('cite')){
+    var n = parseInt(el.dataset.cite, 10);
+    var cards = document.querySelectorAll('#chat .src-card');
+    var card = cards[n - 1];
+    if (card){
+      card.scrollIntoView({behavior:'smooth', block:'center'});
+      card.classList.add('flash');
+      setTimeout(function(){ card.classList.remove('flash'); }, 2000);
+    }
+    return;
+  }
+  var btn = el.closest ? el.closest('.src-btn') : null;
+  if (!btn) return;
+  var card = btn.closest('.src-card');
+  if (btn.dataset.act === 'toggle'){ if (card) card.classList.toggle('open'); }
+  else if (btn.dataset.act === 'read'){
+    var ex = btn.dataset.ex || '';
+    var fullEx = '';
+    if (card){ var se = card.querySelector('.src-excerpt'); if (se) fullEx = se.textContent; }
+    readChapter(btn.dataset.vol, parseInt(btn.dataset.ch, 10), fullEx || ex);
+  }
+  else if (btn.dataset.act === 'locate'){
+    locateFile(btn.dataset.vol, parseInt(btn.dataset.ch, 10));
+  }
+});
 
 /* ---------- 来源 → 定位原文 ---------- */
 async function readChapter(vol, ch, excerptHint){
@@ -452,19 +488,25 @@ async function readChapter(vol, ch, excerptHint){
     var paras = (j.text||'').split('\n').filter(function(x){ return x.trim(); });
     var html = paras.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
     var box = $('cm-text'); box.innerHTML = html;
+    var note = '';
     if (excerptHint){
-      var idx = (j.text||'').indexOf(excerptHint);
+      var probe = excerptHint.slice(0, 24);
+      var idx = (j.text||'').indexOf(probe);
       if (idx >= 0){
-        var before = esc((j.text||'').slice(0, idx)).split('\n').filter(function(x){ return x.trim(); }).length;
-        // 高亮提示词所在段
         var ps = box.querySelectorAll('p');
         var acc = 0;
         for (var i=0;i<ps.length;i++){
           acc += ps[i].textContent.length + 1;
-          if (acc > idx){ ps[i].innerHTML = ps[i].innerHTML.replace(esc(excerptHint), '<mark>'+esc(excerptHint)+'</mark>'); box.scrollTop = ps[i].offsetTop - 20; break; }
+          if (acc > idx){
+            ps[i].innerHTML = '<mark>'+ps[i].textContent+'</mark>';
+            note = '<div class="meta" style="margin-bottom:10px">🟡 黄色高亮 = AI 引用的原文片段（所在段落）</div>';
+            box.scrollTop = ps[i].offsetTop - 20;
+            break;
+          }
         }
       }
     }
+    if (note) box.insertAdjacentHTML('afterbegin', note);
     $('chapter-modal').classList.add('show');
   } catch(e){ toast('加载失败：'+e.message); }
 }
@@ -493,7 +535,7 @@ async function loadLibrary(){
         var it = document.createElement('div');
         it.className='ch-item';
         it.textContent = (c.n ? ('第'+c.n+'章 ') : '') + c.title;
-        it.onclick = function(){ showChapter(v.name, c.n); };
+        it.onclick = function(e){ if (e && e.stopPropagation) e.stopPropagation(); showChapter(v.name, c.n); };
         list.appendChild(it);
       });
       volDiv.onclick = function(){ volDiv.classList.toggle('open'); };
