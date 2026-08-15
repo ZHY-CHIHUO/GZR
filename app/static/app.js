@@ -300,9 +300,19 @@ function gotoLoreSection(section){
   switchTab('read');
   switchReadTab('lore');
   loadLore().then(function(){
-    var found = null;
-    (LORE_DATA.toc || []).forEach(function(t){ if (!found && t.text === section) found = t; });
-    if (found){ setTimeout(function(){ scrollToLore(found.anchor); }, 350); }
+    var target = null;
+    section = String(section || '').trim();
+    // 优先匹配目录标题
+    (LORE_DATA.toc || []).forEach(function(t){
+      if (!target && String(t.text || '').trim() === section) target = {anchor: t.anchor};
+    });
+    // 目录没有（正文段落小节）则按正文段落文本定位
+    if (!target){
+      (LORE_DATA.paras || []).forEach(function(p, i){
+        if (!target && String(p.text || '').trim() === section) target = {anchor: 'lpara' + i};
+      });
+    }
+    if (target){ setTimeout(function(){ scrollToLore(target.anchor); }, 350); }
   });
 }
 /* ---------- 来源 → 定位原文 ---------- */
@@ -1246,9 +1256,9 @@ function renderLore(){
   var tp = $('lore-text');
   var b = '<div class="ch-title">'+esc(LORE_DATA.title)+'</div>' +
     '<a class="dl-btn lore-dl" href="/api/lore/download">⬇ 下载 docx 原件</a>';
-  LORE_DATA.paras.forEach(function(p){
+  LORE_DATA.paras.forEach(function(p, i){
     if (p.kind === 'h2') b += '<div class="lore-h lore-h'+p.level+'" id="'+p.anchor+'">'+esc(p.text)+'</div>';
-    else b += '<div class="lore-p">'+esc(p.text)+'</div>';
+    else b += '<div class="lore-p" id="lpara'+i+'">'+esc(p.text)+'</div>';
   });
   tp.innerHTML = b;
 }
