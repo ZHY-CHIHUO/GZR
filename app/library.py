@@ -204,8 +204,13 @@ def _combined_flat_toc():
             cover_page = max(1, items[0][2] - 1)
             out.append({"title": v["name"], "page": cover_page, "depth": 0})
             out.append({"title": "封面", "page": cover_page, "depth": 1})
-            for n, t, pg in items:
-                out.append({"title": f"第{_int_to_cn(n)}节：{t}", "page": pg, "depth": 1})
+            # 每 20 章一组（加层级）
+            for i in range(0, len(items), 20):
+                chunk = items[i:i + 20]
+                first, last = chunk[0][0], chunk[-1][0]
+                out.append({"title": f"第{first}~{last}节", "page": chunk[0][2], "depth": 1})
+                for n, t, pg in chunk:
+                    out.append({"title": f"第{_int_to_cn(n)}节：{t}", "page": pg, "depth": 2})
     if extras:
         out.append({"title": "番外", "page": extras[0][1], "depth": 0})
         for t, pg in extras:
