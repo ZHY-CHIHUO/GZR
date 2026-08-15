@@ -849,7 +849,7 @@ function renderWikiDetail(e, cat, index){
     '<div class="wiki-article-grid">' +
       '<div class="wiki-article-copy">' +
         '<p class="wiki-lead">'+esc(lead)+'</p>' +
-        (body ? '<section class="wiki-section"><h2>概述</h2>'+body+'</section>' : '') +
+        (body ? body : '') +
         '<section class="wiki-section wiki-source"><h2>资料来源</h2><p>本条目整理自「'+esc(e.section || cat)+'」资料库。</p></section>' +
       '</div>' +
       '<aside class="wiki-infobox" aria-label="条目信息">' +
