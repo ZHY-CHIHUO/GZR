@@ -3,9 +3,55 @@ var WIKI_FEATURE_SEED=0;var WIKI_FEATURE_LIST=[];
 var WIKI_ORDER=['作品资料','世界设定','天地秘境','五域地理','人物','蛊虫','势力','仙蛊屋','杀招','灾劫','境界流派','人祖传'];
 var WIKI_LABELS={'作品资料':'作品资料','世界设定':'世界设定','天地秘境':'天地秘境','五域地理':'五域地理','人物':'人物','蛊虫':'蛊虫','势力':'势力','仙蛊屋':'仙蛊屋','杀招':'杀招','灾劫':'灾劫','境界流派':'境界与流派','人祖传':'人祖传'};
 function wikiItems(c){return(WIKI&&WIKI.categories&&WIKI.categories[c])||[]}
+var WIKI_ALIASES = {};
+var WIKI_CURATED_ALIASES = {
+  '古月方源':'方源','方媛':'方源','洪亭':'红莲魔尊','本杰孙':'盗天魔尊','冥幽':'幽魂魔尊',
+  '曾阿牛':'仇九','耶律瓦':'玉阳子','孙名录':'玄极子','傲骨魔君':'沈桀骜','诗仙':'李小白'
+};
+function buildWikiAliases(){
+  WIKI_ALIASES = {};
+  var entryNames = {};
+  Object.keys(WIKI.categories || {}).forEach(function(c){
+    (WIKI.categories[c] || []).forEach(function(e){ entryNames[e.name] = 1; });
+  });
+  (WIKI.other || []).forEach(function(e){ entryNames[e.name] = 1; });
+  function reg(alias, target){
+    if (!alias || !target) return;
+    if (entryNames[alias] && entryNames[alias] !== target && WIKI_ALIASES[alias]) return;
+    if (!entryNames[alias]) WIKI_ALIASES[alias] = target;
+  }
+  function addEntry(name, entry){
+    // 括号内别名：龙宫（龙庭）-> 龙庭 指向 龙宫（龙庭）
+    var m = String(name).match(/^(.*?)[（(]([^（）()]+)[）)]$/);
+    if (m){
+      var base = m[1].trim(), inner = m[2].trim();
+      if (entryNames[base]) reg(base, name);
+      reg(inner, name);
+    }
+    // （前世）/（众）/（新）等后缀：搜 韩立 命中 韩立（前世）
+    var m2 = String(name).match(/^(.*?)[（(](前世|众|新|原任)[）)]$/);
+    if (m2){
+      var b = m2[1].trim();
+      if (!entryNames[b]) reg(b, name);
+    }
+    // 词条自带 aliases 字段
+    (entry.aliases || []).forEach(function(a){ reg(a, entry.name); });
+  }
+  Object.keys(WIKI.categories || {}).forEach(function(c){
+    (WIKI.categories[c] || []).forEach(function(e){ addEntry(e.name, e); });
+  });
+  (WIKI.other || []).forEach(function(e){ addEntry(e.name, e); });
+  Object.keys(WIKI_CURATED_ALIASES).forEach(function(a){
+    var t = WIKI_CURATED_ALIASES[a];
+    if (entryNames[t]) WIKI_ALIASES[a] = t;
+  });
+}
+function resolveWikiName(q){
+  return WIKI_ALIASES[q] || q;
+}
 function wikiShow(v){$('wiki-home').hidden=v!=='home';$('wiki-results').hidden=v!=='browse';$('wiki-browser').dataset.view=v}
 function organizeWikiCategories(){var other=(WIKI.other||[]);var specs=[['作品资料',/作品简介|作品目录|作品设定|背景介绍|基本介绍/],['世界设定',/世界观|世界背景|生灵蛊虫异人|异人介绍/],['天地秘境',/天地秘境|人造天地秘境|洞天秘境/],['五域地理',/五域|南疆|北原|中洲|西漠|东海/],['人祖传',/^人祖传|《人祖传》|人祖及十子/]];specs.forEach(function(s){var found=other.filter(function(e){return s[1].test(String(e.section||''))});if(found.length)WIKI.categories[s[0]]=found});}
-async function loadWiki(){if(WIKI){renderWikiHome();return}try{var r=await fetch('/api/wiki');if(!r.ok)throw Error();WIKI=await r.json();organizeWikiCategories();WIKI_SUBS={};wikiItems('蛊虫').forEach(function(e){var k=e.sub||'其他';WIKI_SUBS[k]=(WIKI_SUBS[k]||0)+1});renderWikiHome()}catch(e){$('wiki-home-body').innerHTML='<div class="empty">百科数据暂时无法加载</div>'}}
+async function loadWiki(){if(WIKI){renderWikiHome();return}try{var r=await fetch('/api/wiki');if(!r.ok)throw Error();WIKI=await r.json();organizeWikiCategories();buildWikiAliases();WIKI_SUBS={};wikiItems('蛊虫').forEach(function(e){var k=e.sub||'其他';WIKI_SUBS[k]=(WIKI_SUBS[k]||0)+1});renderWikiHome()}catch(e){$('wiki-home-body').innerHTML='<div class="empty">百科数据暂时无法加载</div>'}}
 function card(e,c,kind,feature){var b=document.createElement('button');b.type='button';b.className=kind||'wiki-feature-card';b.innerHTML='<span class="wiki-card-meta">'+esc(WIKI_LABELS[c]||c)+(e.sub&&e.sub!=='其他'?' · '+esc(e.sub):'')+'</span><strong>'+esc(e.name)+'</strong><span class="wiki-card-copy">'+esc(wikiExcerpt(e.desc,76))+'</span><span class="wiki-card-link">查看条目</span>';b.onclick=function(){feature?openFeatureEntry(e,c):openEntry(e,c)};return b}
 function renderWikiHome(){if(!WIKI)return;wikiShow('home');var cats=$('wiki-cats');cats.innerHTML='';var total=0;WIKI_ORDER.forEach(function(c){var a=wikiItems(c);if(!a.length)return;total+=a.length;var b=document.createElement('button');b.type='button';b.className='wiki-category-card';b.innerHTML='<span class="wiki-category-index">'+String(cats.children.length+1).padStart(2,'0')+'</span><strong>'+esc(WIKI_LABELS[c]||c)+'</strong><span>'+a.length+' 条条目</span><i>浏览</i><span class="wiki-card-mark">'+esc((WIKI_LABELS[c]||c).charAt(0))+'</span>';b.onclick=function(){openCatalogue(c)};cats.appendChild(b)});$('wiki-total-count').textContent=total+' 条已收录条目';var quick=['方源','春秋蝉','天庭','逆流河'];var q=$('wiki-shortcuts');q.innerHTML='';quick.forEach(function(x){var b=document.createElement('button');b.type='button';b.textContent=x;b.onclick=function(){$('wiki-search').value=x;searchWiki(x)};q.appendChild(b)});renderFeatures()}
 function renderFeatures(){var all=[];WIKI_ORDER.forEach(function(c){wikiItems(c).forEach(function(e){all.push({entry:e,cat:c})})});var box=$('wiki-feature-list');box.innerHTML='';WIKI_FEATURE_LIST=[];for(var i=0;all.length&&i<3;i++){var x=all[(WIKI_FEATURE_SEED*13+i*97)%all.length];WIKI_FEATURE_LIST.push(x);box.appendChild(card(x.entry,x.cat,false,true))}}
@@ -14,11 +60,11 @@ function renderCatalogue(){var vis=wikiItems(WIKI_CAT).filter(function(e){return
 function renderFilters(){var box=$('wiki-subs');box.innerHTML='';if(WIKI_CAT!=='蛊虫')return;['','一转','二转','三转','四转','五转','六转','七转','八转','九转','仙蛊','其他'].forEach(function(v){if(v&&!WIKI_SUBS[v])return;var b=document.createElement('button');b.type='button';b.className='wiki-filter'+(WIKI_SUB===v?' active':'');b.textContent=v||'全部';b.onclick=function(){WIKI_SUB=v;renderCatalogue()};box.appendChild(b)})}
 function renderIndex(selectFirst){var box=$('wiki-list');box.innerHTML='';WIKI_VISIBLE.forEach(function(x,i){var b=document.createElement('button');b.type='button';b.className='wiki-index-item';b.dataset.key=wikiEntryKey(x.entry,x.cat);b.innerHTML='<strong>'+esc(x.entry.name)+'</strong><span>'+esc(WIKI_LABELS[x.cat]||x.cat)+'</span>';b.onclick=function(){renderDetail(x.entry,x.cat,i)};box.appendChild(b)});if(!WIKI_VISIBLE.length){box.innerHTML='<div class="empty">没有匹配条目</div>';$('wiki-detail').innerHTML='<div class="empty">尝试其他分类或搜索词</div>';return}var idx=WIKI_VISIBLE.findIndex(function(x){return WIKI_CURRENT&&wikiEntryKey(x.entry,x.cat)===WIKI_CURRENT.key});if(selectFirst||idx<0)renderDetail(WIKI_VISIBLE[0].entry,WIKI_VISIBLE[0].cat,0);else setIndex(WIKI_CURRENT.key)}
 function setIndex(k){document.querySelectorAll('.wiki-index-item').forEach(function(b){b.classList.toggle('active',b.dataset.key===k)})}
-function searchWiki(raw){var q=String(raw||'').trim();if(!q){renderWikiHome();return}var found=[];Object.keys(WIKI.categories||{}).forEach(function(c){wikiItems(c).forEach(function(e){if(String(e.name||'').indexOf(q)>=0||String(e.desc||'').indexOf(q)>=0)found.push({entry:e,cat:c})})});found.sort(function(a,b){return(a.entry.name===q?-1:0)-(b.entry.name===q?-1:0)});WIKI_VISIBLE=found.slice(0,300);$('wiki-mini-search').value=q;$('wiki-results-overline').textContent='SEARCH RESULTS';$('wiki-result-title').textContent='“'+q+'” 的搜索结果';$('wiki-result-count').textContent='找到 '+WIKI_VISIBLE.length+' 条匹配条目';$('wiki-subs').innerHTML='';renderIndex(true);wikiShow('browse')}
+function searchWiki(raw){var rawQ=String(raw||'').trim();if(!rawQ){renderWikiHome();return}var q=resolveWikiName(rawQ);var found=[];Object.keys(WIKI.categories||{}).forEach(function(c){wikiItems(c).forEach(function(e){var al=(e.aliases||[]).join(' ');if(String(e.name||'').indexOf(q)>=0||al.indexOf(rawQ)>=0||al.indexOf(q)>=0||String(e.desc||'').indexOf(q)>=0||String(e.desc||'').indexOf(rawQ)>=0)found.push({entry:e,cat:c})})});found.sort(function(a,b){return(a.entry.name===q?-1:0)-(b.entry.name===q?-1:0)});WIKI_VISIBLE=found.slice(0,300);$('wiki-mini-search').value=q;$('wiki-results-overline').textContent='SEARCH RESULTS';$('wiki-result-title').textContent='“'+q+'” 的搜索结果';$('wiki-result-count').textContent='找到 '+WIKI_VISIBLE.length+' 条匹配条目';$('wiki-subs').innerHTML='';renderIndex(true);wikiShow('browse')}
 function openEntry(e,c){var i=WIKI_VISIBLE.findIndex(function(x){return x.entry===e&&x.cat===c});renderDetail(e,c,i);wikiShow('browse')}
 function openCatalogueAt(c,e){WIKI_CAT=c;WIKI_SUB='';$('wiki-mini-search').value='';var vis=wikiItems(c).filter(function(x){return !WIKI_SUB||(x.sub||'其他')===WIKI_SUB}).map(function(x){return {entry:x,cat:c}});WIKI_VISIBLE=vis;$('wiki-results-overline').textContent='CATALOGUE · '+(WIKI_LABELS[c]||c);$('wiki-result-title').textContent=WIKI_LABELS[c]||c;$('wiki-result-count').textContent=vis.length+' 条条目';renderFilters();var i=vis.findIndex(function(x){return x.entry===e});renderIndex(false);renderDetail(e,c,i);wikiShow('browse')}
 function openFeatureEntry(e,c){openCatalogueAt(c,e)}
-function renderDetail(e,c,i){c=c||WIKI_CAT;WIKI_CURRENT={key:wikiEntryKey(e,c),entry:e,cat:c};setIndex(WIKI_CURRENT.key);var ps=wikiParagraphs(e.desc),lead=ps.shift()||'暂无条目摘要。',body=ps.map(function(p){return'<p>'+esc(p)+'</p>'}).join('');var sub=e.sub&&e.sub!=='其他'?'<div><dt>细分</dt><dd>'+esc(e.sub)+'</dd></div>':'';var prev=i>0?WIKI_VISIBLE[i-1]:null,next=i>=0&&i<WIKI_VISIBLE.length-1?WIKI_VISIBLE[i+1]:null;$('wiki-detail').innerHTML='<div class="wiki-article-shell"><div class="wiki-article-tools"><button id="wiki-back-results" type="button">返回目录</button><span class="wiki-article-actions"><button id="wiki-edit-btn" type="button">编辑条目</button><button id="wiki-del-btn" type="button">删除条目</button></span></div><header class="wiki-article-head"><div class="wiki-eyebrow">'+esc(c)+' · '+esc(e.section||'资料条目')+'</div><h1 class="wiki-detail-name">'+esc(e.name)+'</h1><div class="wiki-byline">蛊箓百科 · 设定资料归档</div></header><div class="wiki-article-grid"><div class="wiki-article-copy"><p class="wiki-lead">'+esc(lead)+'</p>'+(body?'<section class="wiki-section"><h2>概述</h2>'+body+'</section>':'')+'<section class="wiki-section wiki-source"><h2>资料来源</h2><p>本条目整理自「'+esc(e.section||c)+'」资料库。</p></section></div><aside class="wiki-infobox"><div class="wiki-infobox-title">条目信息</div><dl><div><dt>名称</dt><dd>'+esc(e.name)+'</dd></div><div><dt>分类</dt><dd>'+esc(WIKI_LABELS[c]||c)+'</dd></div>'+sub+'<div><dt>来源</dt><dd>'+esc(e.section||c)+'</dd></div></dl><button class="btn btn-ghost wiki-ask" id="wiki-ask-btn">向 AI 询问此条目</button></aside></div><nav class="wiki-neighbors">'+(prev?'<button data-wiki-nav="prev" type="button"><span>上一篇</span>'+esc(prev.entry.name)+'</button>':'<span></span>')+(next?'<button data-wiki-nav="next" type="button"><span>下一篇</span>'+esc(next.entry.name)+'</button>':'<span></span>')+'</nav></div>';$('wiki-back-results').onclick=function(){wikiShow('results')};$('wiki-edit-btn').onclick=function(){openWikiEdit()};$('wiki-del-btn').onclick=function(){deleteWikiEntry()};$('wiki-ask-btn').onclick=function(){askAbout(e.name)};var p=document.querySelector('[data-wiki-nav="prev"]'),n=document.querySelector('[data-wiki-nav="next"]');if(p)p.onclick=function(){renderDetail(prev.entry,prev.cat,i-1)};if(n)n.onclick=function(){renderDetail(next.entry,next.cat,i+1)};$('wiki-detail').scrollTop=0}
+function renderDetail(e,c,i){c=c||WIKI_CAT;WIKI_CURRENT={key:wikiEntryKey(e,c),entry:e,cat:c};setIndex(WIKI_CURRENT.key);var ps=wikiParagraphs(e.desc),lead=ps.shift()||'暂无条目摘要。',body=ps.map(function(p){return'<p>'+esc(p)+'</p>'}).join('');var sub=e.sub&&e.sub!=='其他'?'<div><dt>细分</dt><dd>'+esc(e.sub)+'</dd></div>':'';var als=e.aliases&&e.aliases.length?'<div><dt>别名</dt><dd>'+esc(e.aliases.join('、'))+'</dd></div>':'';var prev=i>0?WIKI_VISIBLE[i-1]:null,next=i>=0&&i<WIKI_VISIBLE.length-1?WIKI_VISIBLE[i+1]:null;$('wiki-detail').innerHTML='<div class="wiki-article-shell"><div class="wiki-article-tools"><button id="wiki-back-results" type="button">返回目录</button><span class="wiki-article-actions"><button id="wiki-edit-btn" type="button">编辑条目</button><button id="wiki-del-btn" type="button">删除条目</button></span></div><header class="wiki-article-head"><div class="wiki-eyebrow">'+esc(c)+' · '+esc(e.section||'资料条目')+'</div><h1 class="wiki-detail-name">'+esc(e.name)+'</h1><div class="wiki-byline">蛊箓百科 · 设定资料归档</div></header><div class="wiki-article-grid"><div class="wiki-article-copy"><p class="wiki-lead">'+esc(lead)+'</p>'+(body?'<section class="wiki-section"><h2>概述</h2>'+body+'</section>':'')+'<section class="wiki-section wiki-source"><h2>资料来源</h2><p>本条目整理自「'+esc(e.section||c)+'」资料库。</p></section></div><aside class="wiki-infobox"><div class="wiki-infobox-title">条目信息</div><dl><div><dt>名称</dt><dd>'+esc(e.name)+'</dd></div><div><dt>分类</dt><dd>'+esc(WIKI_LABELS[c]||c)+'</dd></div>'+sub+als+'<div><dt>来源</dt><dd>'+esc(e.section||c)+'</dd></div></dl><button class="btn btn-ghost wiki-ask" id="wiki-ask-btn">向 AI 询问此条目</button></aside></div><nav class="wiki-neighbors">'+(prev?'<button data-wiki-nav="prev" type="button"><span>上一篇</span>'+esc(prev.entry.name)+'</button>':'<span></span>')+(next?'<button data-wiki-nav="next" type="button"><span>下一篇</span>'+esc(next.entry.name)+'</button>':'<span></span>')+'</nav></div>';$('wiki-back-results').onclick=function(){wikiShow('results')};$('wiki-edit-btn').onclick=function(){openWikiEdit()};$('wiki-del-btn').onclick=function(){deleteWikiEntry()};$('wiki-ask-btn').onclick=function(){askAbout(e.name)};var p=document.querySelector('[data-wiki-nav="prev"]'),n=document.querySelector('[data-wiki-nav="next"]');if(p)p.onclick=function(){renderDetail(prev.entry,prev.cat,i-1)};if(n)n.onclick=function(){renderDetail(next.entry,next.cat,i+1)};$('wiki-detail').scrollTop=0}
 function renderWikiList(){if(WIKI)searchWiki($('wiki-search').value)}
 $('wiki-search-form').addEventListener('submit',function(e){e.preventDefault();searchWiki($('wiki-search').value)});$('wiki-mini-search-form').addEventListener('submit',function(e){e.preventDefault();searchWiki($('wiki-mini-search').value)});$('wiki-back-home').onclick=function(){renderWikiHome()};$('wiki-refresh-feature').onclick=function(){WIKI_FEATURE_SEED++;renderFeatures()};
 var WIKI_EDIT=null;
@@ -28,6 +74,7 @@ async function saveWikiEntry(){var payload={cat:$('we-cat').value,name:($('we-na
 async function openWikiByName(name){
   switchTab('wiki');
   if (!WIKI) await loadWiki();
+  name = resolveWikiName(name);
   var found = null, cat = null;
   Object.keys(WIKI.categories || {}).forEach(function(c){
     if (found) return;
