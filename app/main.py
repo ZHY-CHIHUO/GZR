@@ -171,29 +171,17 @@ def ask(req: AskReq):
         return JSONResponse({"error": "问题不能为空"}, status_code=400)
     if retriever is None:
         return JSONResponse({"error": "检索库未加载"}, status_code=503)
+    # 一次检索（普通 + 词条名强制召回 + 词条名原文补充）合并完成
     hits = _force_wiki_hits(q, retriever.search(q, scope=req.scope))
+    hits = hits + _retry_extra(q, hits, req.scope)
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
-    retried = False
     web_sources = []
     if config.KEY:
         try:
             answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
         except Exception as e:
             return JSONResponse({"error": f"AI 调用失败：{e}"}, status_code=502)
-        # 首答说"未查到" -> 补充检索一轮再答
-        if any(m in answer for m in _RETRY_MARKS):
-            extra = _retry_extra(q, hits, req.scope)
-            if extra:
-                hits2 = hits + extra
-                system2, user2 = build_prompt(q, hits2, config.EXCERPT_CHARS)
-                try:
-                    answer = ask_llm(system2, user2, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
-                    retried = True
-                    hits = hits2
-                    system, user = system2, user2
-                except Exception:
-                    retried = False
-        # 仍然未查到且允许联网 -> 用 Responses API + web_search 联网回答
+        # 仍说"未查到"：联网则网络回答，不联网则保留通用知识回答（首答已诚实标注）
         web_used = False
         if req.web_fallback and any(m in answer for m in _RETRY_MARKS):
             try:
@@ -222,7 +210,6 @@ def ask(req: AskReq):
         "sources": [format_source(h) for h in hits] + web_sources,
         "cost_rmb": estimate_cost(system, user, answer) if not mock else 0.0,
         "mock": mock,
-        "retried": retried,
         "web": web_used,
         "wiki_cites": _wiki_cites_in(answer),
     }
