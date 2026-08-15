@@ -20,14 +20,27 @@ nav{display:flex;gap:6px;}
 main{flex:1;display:flex;flex-direction:column;min-height:0;}
 .panel{flex:1;display:flex;flex-direction:column;min-height:0;}
 [hidden]{display:none !important;}
-/* ---- 问答工具栏 ---- */
-.chat-tools{display:flex;gap:8px;padding:10px 20px 0;align-items:center;}
-.chat-tools input{flex:1;padding:8px 12px;border:1px solid #d8cfbc;border-radius:8px;font-size:13px;outline:none;}
-.tool-btn{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;color:var(--ink);}
+/* ---- 聊天侧栏 ---- */
+.chat-main{flex:1;display:flex;min-height:0;padding:14px 20px 20px;gap:14px;}
+.chat-main .toc-pane{width:230px;min-width:180px;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:8px;display:flex;flex-direction:column;transition:width .2s ease;}
+.chat-main .toc-pane.collapsed{width:30px;min-width:30px;padding:6px 4px;border:none;background:transparent;}
+.chat-main .toc-pane.collapsed .toc-title{display:none;}
+.chat-main .toc-pane.collapsed .chat-nav-body{display:none;}
+.chat-main .toc-pane.collapsed .toc-head{justify-content:center;}
+.chat-main .toc-pane.collapsed .toc-fold{border:none;background:rgba(176,141,87,.15);font-size:16px;padding:2px 8px;border-radius:8px;color:#7a5c3e;opacity:.5;}
+.chat-main .toc-pane.collapsed:hover .toc-fold{opacity:1;background:rgba(176,141,87,.3);}
+.chat-nav-body{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0;}
+.chat-nav-body input{padding:8px 10px;border:1px solid #d8cfbc;border-radius:8px;font-size:13px;outline:none;}
+#chat-nav-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:2px;}
+.nav-item{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:6px;font-size:13px;cursor:pointer;color:#444;}
+.nav-item:hover{background:#f5f0e6;}
+.nav-q{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.nav-del{border:none;background:none;color:#c9b8a0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;}
+.nav-del:hover{color:#c62828;}
+.tool-btn{border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;color:var(--ink);}
 .tool-btn:hover{background:#f0e9da;}
-.chat-nav{position:absolute;top:56px;left:20px;z-index:20;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:320px;overflow-y:auto;width:280px;padding:8px;}
-.nav-item{padding:7px 10px;border-radius:6px;font-size:13px;cursor:pointer;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.nav-item:hover{background:#f5f0e6;color:var(--accent);}
+.tool-btn.full{width:100%;}
+.chat-pane{flex:1;display:flex;flex-direction:column;min-height:0;}
 .msg.dim{opacity:.25;}
 /* ---- 问答 ---- */
 #chat{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
@@ -94,14 +107,16 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .lore-h2{font-size:15px;border-left:3px solid #b08d57;padding-left:8px;color:#5a4530;}
 .lore-h3{font-size:14px;color:#7a5c3e;padding-left:6px;}
 .lore-p{margin:6px 0;line-height:2;font-size:14px;color:#333;}
-.toc-vol-title{padding:6px 8px;font-size:13px;font-weight:700;cursor:pointer;border-radius:6px;color:#5a4530;}
-.toc-vol-title:hover{background:#f5f0e6;}
-.toc-vol.open>.toc-vol-title{color:var(--accent);}
-.toc-vol .toc-chapters{display:none;padding-left:10px;}
-.toc-vol.open .toc-chapters{display:block;}
-.toc-vol.sub{padding-left:6px;}
-.toc-vol.sub .toc-vol-title{font-weight:600;color:#7a5c3e;font-size:12px;}
-.ch-item.l3{padding-left:20px;font-size:12px;color:#9a9284;}
+.toc-node{position:relative;}
+.toc-node .toc-arrow{display:inline-block;width:14px;height:14px;cursor:pointer;color:#b08d57;font-size:11px;line-height:14px;text-align:center;user-select:none;}
+.toc-node .toc-arrow::before{content:'▸';}
+.toc-node.open .toc-arrow::before{content:'▾';}
+.toc-node .toc-dot{display:inline-block;width:14px;text-align:center;color:#ccc;font-size:8px;}
+.toc-node .toc-link{display:inline-block;padding:4px 6px;font-size:13px;cursor:pointer;border-radius:5px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;vertical-align:middle;}
+.toc-node .toc-link:hover{background:#f5f0e6;color:var(--accent);}
+.toc-node .toc-children{display:none;padding-left:16px;}
+.toc-node.open .toc-children{display:block;}
+.toc-node.leaf .toc-link{color:#777;font-size:12px;max-width:180px;}
 .lore-dl{margin:0 0 10px;display:inline-block;}
 .dl-btn{margin-top:10px;align-self:flex-start;border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;color:var(--ink);text-decoration:none;}
 .dl-btn:hover{background:#f0e9da;}
@@ -204,23 +219,29 @@ mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
 <main>
   <!-- 问答 -->
   <section id="tab-chat" class="panel">
-    <div class="chat-tools">
-      <input id="chat-search" placeholder="🔍 搜索聊天记录…" autocomplete="off">
-      <button class="tool-btn" onclick="toggleChatNav()">🧭 导航</button>
-      <button class="tool-btn" onclick="clearChat()">🗑 清空</button>
+    <div class="chat-main">
+      <div class="toc-pane" id="chat-nav-pane">
+        <div class="toc-head"><span class="toc-title">🧭 对话</span><button class="toc-fold" onclick="toggleChatNavPane()" title="收起/展开">«</button></div>
+        <div class="chat-nav-body">
+          <input id="chat-search" placeholder="🔍 搜索记录…" autocomplete="off">
+          <div id="chat-nav-list"></div>
+          <button class="tool-btn full" onclick="clearChat()">🗑 清空全部</button>
+        </div>
+      </div>
+      <div class="chat-pane">
+        <div id="chat"></div>
+        <div id="suggest"></div>
+        <footer class="chat-bar">
+          <select id="scope" title="检索范围">
+            <option value="all">📚 全部库</option>
+            <option value="novel">📖 仅正文</option>
+            <option value="lore">🗂️ 仅设定</option>
+          </select>
+          <input id="q" placeholder="输入问题，回车发送（支持追问上下文）" autocomplete="off">
+          <button id="send">发送</button>
+        </footer>
+      </div>
     </div>
-    <div id="chat-nav" class="chat-nav" hidden></div>
-    <div id="chat"></div>
-    <div id="suggest"></div>
-    <footer class="chat-bar">
-      <select id="scope" title="检索范围">
-        <option value="all">📚 全部库</option>
-        <option value="novel">📖 仅正文</option>
-        <option value="lore">🗂️ 仅设定</option>
-      </select>
-      <input id="q" placeholder="输入问题，回车发送（支持追问上下文）" autocomplete="off">
-      <button id="send">发送</button>
-    </footer>
   </section>
 
   <!-- 阅读 -->
@@ -1032,24 +1053,29 @@ async function loadLore(){
   } catch(e){ $('lore-toc').querySelector('.toc-body').innerHTML = '<div class="empty">加载失败</div>'; }
 }
 function renderLore(){
-  // 目录树
-  var tb = $('lore-toc').querySelector('.toc-body');
-  tb.innerHTML = '';
-  var html = '';
-  var stack = [];
+  // 目录树：扁平 -> 嵌套树 -> 递归渲染（箭头折叠 + 标题跳转分离）
+  var tree = [], stack = [{level: 0, children: tree}];
   LORE_DATA.toc.forEach(function(item){
-    while (stack.length && stack[stack.length - 1] >= item.level){
-      stack.pop(); html += '</div></div>';
-    }
-    if (item.level >= 3){
-      html += '<div class="ch-item l3" onclick="scrollToLore(\''+item.anchor+'\')">'+esc(item.text)+'</div>';
-    } else {
-      html += '<div class="toc-vol'+(item.level===2?' sub':'')+'"><div class="toc-vol-title" onclick="this.parentNode.classList.toggle(\'open\')">▸ '+esc(item.text)+'</div><div class="toc-chapters">';
-      stack.push(item.level);
-    }
+    var node = {text: item.text, level: item.level, anchor: item.anchor, children: []};
+    while (stack.length > 1 && stack[stack.length - 1].level >= item.level) stack.pop();
+    stack[stack.length - 1].children.push(node);
+    stack.push(node);
   });
-  while (stack.length){ stack.pop(); html += '</div></div>'; }
-  tb.innerHTML = html;
+  function renderNode(n){
+    var html = '';
+    if (n.children.length){
+      html += '<div class="toc-node open">' +
+        '<span class="toc-arrow" onclick="this.parentNode.classList.toggle(\'open\')"></span>' +
+        '<span class="toc-link" onclick="scrollToLore(\''+n.anchor+'\')">'+esc(n.text)+'</span>' +
+        '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></div>';
+    } else {
+      html += '<div class="toc-node leaf"><span class="toc-dot"></span>' +
+        '<span class="toc-link" onclick="scrollToLore(\''+n.anchor+'\')">'+esc(n.text)+'</span></div>';
+    }
+    return html;
+  }
+  var tb = $('lore-toc').querySelector('.toc-body');
+  tb.innerHTML = tree.map(renderNode).join('');
   // 正文
   var tp = $('lore-text');
   var b = '<div class="ch-title">'+esc(LORE_DATA.title)+'</div>' +
@@ -1075,46 +1101,53 @@ document.querySelectorAll('.rtab[data-gt]').forEach(function(btn){
   });
 });
 
-/* ---------- 聊天工具栏：搜索 / 导航 / 清空 ---------- */
-$('chat-search').addEventListener('input', function(){
-  var q = this.value.trim();
-  var msgs = document.querySelectorAll('#chat .msg');
-  var first = null;
-  msgs.forEach(function(m){
-    if (!q){ m.classList.remove('dim'); return; }
-    if (m.textContent.indexOf(q) >= 0){ m.classList.remove('dim'); if (!first) first = m; }
-    else { m.classList.add('dim'); }
-  });
-  if (q && first) first.scrollIntoView({behavior:'smooth', block:'center'});
-});
-function toggleChatNav(){
-  var n = $('chat-nav');
-  n.hidden = !n.hidden;
-  if (!n.hidden) renderChatNav();
+/* ---------- 聊天侧栏：搜索 / 导航 / 删除 / 清空 ---------- */
+function toggleChatNavPane(){
+  var t = $('chat-nav-pane');
+  t.classList.toggle('collapsed');
+  var btn = t.querySelector('.toc-fold');
+  btn.textContent = t.classList.contains('collapsed') ? '»' : '«';
 }
-function renderChatNav(){
+function renderChatNavList(){
+  var q = ($('chat-search').value || '').trim();
+  var users = document.querySelectorAll('#chat .msg.user');
   var html = '';
-  document.querySelectorAll('#chat .msg.user').forEach(function(m, i){
-    html += '<div class="nav-item" onclick="scrollToMsg('+i+')">'+esc(m.textContent.slice(0, 36))+'</div>';
+  users.forEach(function(m, i){
+    var txt = m.textContent.trim();
+    if (q && txt.indexOf(q) < 0) return;
+    html += '<div class="nav-item"><span class="nav-q" onclick="scrollToMsg('+i+')" title="'+esc(txt)+'">'+esc(txt.slice(0, 24))+'</span>' +
+      '<button class="nav-del" onclick="delMsg('+i+')" title="删除这条">×</button></div>';
   });
-  $('chat-nav').innerHTML = html || '<div class="empty" style="padding:12px">暂无聊天记录</div>';
+  $('chat-nav-list').innerHTML = html || '<div class="empty" style="padding:12px">暂无记录</div>';
 }
+$('chat-search').addEventListener('input', renderChatNavList);
 function scrollToMsg(i){
   var m = document.querySelectorAll('#chat .msg.user')[i];
   if (m) m.scrollIntoView({behavior:'smooth', block:'center'});
-  $('chat-nav').hidden = true;
+}
+function delMsg(i){
+  var users = document.querySelectorAll('#chat .msg.user');
+  var target = users[i];
+  if (!target) return;
+  var all = Array.prototype.slice.call(document.querySelectorAll('#chat .msg'));
+  var ti = all.indexOf(target);
+  target.remove();
+  if (all[ti + 1] && all[ti + 1].classList.contains('bot')) all[ti + 1].remove();
+  saveChat();
+  renderChatNavList();
 }
 function clearChat(){
   if (!confirm('确定清空所有聊天记录吗？')) return;
   try { localStorage.removeItem('gzr.chat'); localStorage.removeItem('gzr.chatHistory'); } catch(e){}
   HISTORY = [];
   $('chat').innerHTML = '<div class="msg bot">你好，我是《蛊真人》专属问答助手（本地 RAG，双库：2334 章正文 + 设定合集）。问关于剧情、人物、蛊虫、设定的问题吧，例如「白玉蛊是怎么炼成的」。</div>';
-  $('chat-nav').hidden = true;
+  renderChatNavList();
   toast('已清空聊天记录');
 }
 
 /* ---------- 启动 ---------- */
 loadChat();
+renderChatNavList();
 renderSuggest();
 refreshHealth();
 loadModels();
