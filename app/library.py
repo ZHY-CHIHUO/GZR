@@ -117,22 +117,45 @@ def lore_html():
         return _lore_html_cache
     from docx import Document
     doc = Document(str(LORE_DOCX))
-    paras = [p.text.strip() for p in doc.paragraphs if p.text and p.text.strip()]
-    paras = [p for p in paras if not re.fullmatch(r"\[\d+\]\s*", p)]
+    raw = [(p.text.strip(), (p.style.name if p.style else "") or "")
+           for p in doc.paragraphs if p.text and p.text.strip()]
+    paras = [(t, s) for t, s in raw if not re.fullmatch(r"\[\d+\]\s*", t)]
 
-    def is_heading(p):
-        return (len(p) <= 24 and "：" not in p
-                and not p.endswith(("。", "！", "？", "；", "，", "、")))
+    # 合并残段：以【/】开头的行是上一条目的尾注残段，拼回前一行
+    merged = []
+    for t, s in paras:
+        if (t.startswith("【") or t.startswith("】")) and merged:
+            merged[-1] = (merged[-1][0] + t, merged[-1][1])
+        else:
+            merged.append((t, s))
+
+    def is_heading(t, style):
+        if style and ("Heading" in style or "标题" in style):
+            return True
+        if len(t) < 2 or len(t) > 24:
+            return False
+        if t.startswith(("【", "[", "（", "(")):
+            return False
+        if re.fullmatch(r"[\]\]）\)\-—=·\s]+", t):
+            return False
+        if "：" in t or ":" in t:
+            return False
+        if t.endswith(("。", "！", "？", "；", "，", "、")):
+            return False
+        return True
 
     parts = ["<h1>《蛊真人》资料合集</h1>"]
     toc = []
     idx = 0
-    for p in paras:
+    seen_toc = set()
+    for p, style in merged:
         e = html.escape(p)
-        if is_heading(p):
+        if is_heading(p, style):
             idx += 1
             anchor = f"sec{idx}"
-            toc.append(f'<a href="#{anchor}">{e}</a>')
+            if e not in seen_toc:
+                seen_toc.add(e)
+                toc.append(f'<a href="#{anchor}">{e}</a>')
             parts.append(f'<h2 id="{anchor}">{e}</h2>')
         else:
             parts.append(f"<p>{e}</p>")

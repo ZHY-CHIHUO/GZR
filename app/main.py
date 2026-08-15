@@ -68,7 +68,8 @@ def serve_file(path: str):
     target = (root / path).resolve()
     if not str(target).startswith(str(root)) or not target.is_file():
         raise HTTPException(404, "文件不存在")
-    return FileResponse(target, filename=target.name)
+    # 不带 filename：避免 Content-Disposition: attachment，让浏览器内嵌渲染 PDF
+    return FileResponse(target, media_type="application/pdf")
 
 
 # ---------- 问答 ----------
