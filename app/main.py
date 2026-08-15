@@ -186,9 +186,11 @@ def ask(req: AskReq):
         if req.web_fallback and any(m in answer for m in _RETRY_MARKS):
             try:
                 from .rag import ask_llm_web
-                web_system = ("你是《蛊真人》资料问答助手，当前资料库未能提供答案。"
-                              "请使用联网搜索获取信息，基于搜索结果用简体中文回答，"
-                              "并在回答末尾列出参考来源（网站名或网址）；确实查不到就说明无法确认。")
+                web_system = ("你是《蛊真人》资料问答助手，当前资料库未能提供答案，请使用联网搜索获取信息，"
+                              "并**按平时回答的同样格式**组织内容："
+                              "用简体中文，要点用 **加粗** 标注；回答简洁、分点清晰；"
+                              "回答末尾单独一行给出参考来源，格式：依据来源：[1] 网站名 网址；[2] 网站名 网址……（网址尽量完整），"
+                              "多个来源用分号分隔；确实查不到就明确说明无法确认。")
                 web_answer, cites, searched = ask_llm_web(
                     web_system, q, config.KEY, config.BASE_URL, config.MODEL, history=req.history
                 )

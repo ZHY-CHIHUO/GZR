@@ -42,6 +42,8 @@ function mdRender(text){
   if (inUl) out.push('</ul>'); if (inOl) out.push('</ol>');
   s = out.join('');
   s = s.replace(/\[(\d{1,2})\]/g, function(m, n){ return '<span class="cite" data-cite="'+n+'" title="点击跳转到对应来源">['+n+']</span>'; });
+  // 网址自动转可点击链接
+  s = s.replace(/(https?:\/\/[^\s<>"')]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   return s;
 }
 document.querySelectorAll('.tab').forEach(function(btn){
