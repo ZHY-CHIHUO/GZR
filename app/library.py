@@ -197,6 +197,7 @@ def lore_html():
     toc = []
     idx = 0
     seen_toc = set()
+    toc_stack = []  # (level, 是否已生成该级 summary)
     for pi, (p, style) in enumerate(merged):
         lv = None
         txt = p
@@ -209,24 +210,41 @@ def lore_html():
         if lv:
             idx += 1
             anchor = f"sec{idx}"
-            if e not in seen_toc:
-                seen_toc.add(e)
-                cls = f"toc-l{min(lv, 3)}"
-                toc.append(f'<a class="{cls}" data-lv="{min(lv,3)}" href="#{anchor}">{e}</a>')
             cls = f"l{min(lv, 3)}"
             parts.append(f'<h2 class="{cls}" id="{anchor}">{e}</h2>')
+            if e in seen_toc:
+                continue
+            seen_toc.add(e)
+            # 关闭比当前级别深的 open details
+            while toc_stack and toc_stack[-1] >= lv:
+                toc_stack.pop()
+                toc.append("</details>")
+            if lv == 3:
+                toc.append(f'<a class="toc-l3" href="#{anchor}">{e}</a>')
+            else:
+                toc.append(f'<details open class="toc-grp"><summary><a href="#{anchor}">{e}</a></summary>')
+                toc_stack.append(lv)
         else:
             parts.append(f"<p>{e}</p>")
+    while toc_stack:
+        toc_stack.pop()
+        toc.append("</details>")
     _lore_html_cache = (
         "<style>body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;line-height:1.9;margin:0;background:#f5f3ee}"
         "#toc{position:fixed;left:0;top:0;bottom:0;width:240px;overflow-y:auto;background:#fffdf7;border-right:1px solid #e5e0d6;padding:14px 10px;font-size:12px;z-index:5}"
         "#toc h3{font-size:13px;margin:0 0 8px 6px;color:#7a5c3e;cursor:pointer;user-select:none}"
         "#toc a{display:block;color:#7a5c3e;text-decoration:none;margin:2px 0;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
         "#toc a:hover{background:#f0e9da;border-radius:4px}"
-        "#toc .toc-l1{font-weight:700;margin-top:8px;color:#5a4530;cursor:pointer}"
-        "#toc .toc-l1::before{content:'▾ ';color:#b08d57}"
-        "#toc .toc-l1.collapsed::before{content:'▸ '}"
-        "#toc .toc-l2{padding-left:12px;color:#7a5c3e}"
+        "#toc summary{list-style:none;cursor:pointer;font-weight:700;color:#5a4530;margin-top:6px;user-select:none}"
+        "#toc summary::-webkit-details-marker{display:none}"
+        "#toc summary::before{content:'▾ ';color:#b08d57}"
+        "#toc details:not([open])>summary::before{content:'▸ '}"
+        "#toc summary a{display:inline;margin:0;font-weight:700}"
+        "#toc .toc-grp2 summary{font-weight:600;color:#7a5c3e;margin-top:2px;padding-left:10px}"
+        "#toc .toc-grp2 summary::before{content:'▾ '}"
+        "#toc .toc-grp2 a{font-weight:400;display:inline}"
+        "#toc .toc-grp{padding-left:2px}"
+        "#toc .toc-grp2{padding-left:10px}"
         "#toc .toc-l3{padding-left:24px;color:#9a9284;font-size:11px}"
         "#content{margin-left:260px;max-width:860px;padding:24px 32px 60px;background:#fff;min-height:100vh}"
         "h1{font-size:22px}h2.l1{font-size:18px;margin-top:32px;border-left:4px solid #7a5c3e;padding-left:10px}"
@@ -235,11 +253,5 @@ def lore_html():
         "p{margin:8px 0;color:#333}</style>"
         '<div id="toc"><h3 onclick="var t=document.getElementById(\'tocbody\');t.style.display=t.style.display===\'none\'?\'block\':\'none\'">📑 目录（点击收起）</h3><div id="tocbody">' + "".join(toc) + "</div></div>"
         + '<div id="content">' + "".join(parts) + "</div>"
-        + "<script>var l1s=document.querySelectorAll('.toc-l1');"
-        + "l1s.forEach(function(el){el.addEventListener('click',function(e){"
-        + "e.preventDefault();el.classList.toggle('collapsed');var lv=parseInt(el.getAttribute('data-lv')||'1',10);"
-        + "var s=el.nextElementSibling;"
-        + "while(s){var sl=parseInt(s.getAttribute('data-lv')||'9',10);if(sl<=lv)break;"
-        + "s.style.display=el.classList.contains('collapsed')?'none':'';s=s.nextElementSibling;}));});</script>"
     )
     return _lore_html_cache

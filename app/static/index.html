@@ -56,7 +56,8 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .toc-fold{border:1px solid var(--line);background:#faf8f3;border-radius:6px;padding:1px 8px;cursor:pointer;font-size:12px;color:var(--ink);}
 .toc-fold:hover{background:#f0e9da;}
 .toc-body{overflow-y:auto;max-height:100%;}
-.toc-pane.collapsed{width:0;min-width:0;padding:0;border:none;overflow:hidden;}
+#read-novel .toc-pane.collapsed{width:0;min-width:0;padding:0;border:none;overflow:hidden;}
+#read-novel .toc-pane.collapsed .toc-body{display:none;}
 .toc-chapters{display:none;padding-left:12px;}
 .toc-vol.open .toc-chapters{display:block;}
 .ch-item{padding:3px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -418,6 +419,7 @@ function renderGuide(){
   }
   if (HEALTH && HEALTH.ok && HEALTH.has_key && exists){ var g=$('no-key-guide'); if(g) g.remove(); }
 }
+function stripSec(t){ return String(t||'').replace(/^第[一二三四五六七八九十百0-9]+节[：:]\s*/, ''); }
 function toggleToc(){
   var t = $('novel-toc');
   t.classList.toggle('collapsed');
@@ -547,7 +549,7 @@ async function readChapter(vol, ch, excerptHint){
     var r = await fetch('/api/chapter?vol='+encodeURIComponent(vol)+'&chapter='+ch);
     if (!r.ok){ toast('未找到该章节'); return; }
     var j = await r.json();
-    $('cm-title').textContent = vol + ' · 第' + (ch||'序') + '章 · ' + j.title;
+    $('cm-title').textContent = vol + ' · 第' + (ch||'序') + '章 · ' + stripSec(j.title);
     var paras = (j.text||'').split('\n').filter(function(x){ return x.trim(); });
     var html = paras.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
     var box = $('cm-text'); box.innerHTML = html;
@@ -604,7 +606,7 @@ async function loadLibrary(){
       v.chapters.forEach(function(c){
         var it = document.createElement('div');
         it.className='ch-item';
-        it.textContent = (c.n ? ('第'+c.n+'章 ') : '') + c.title;
+        it.textContent = (c.n ? ('第'+c.n+'章 · ') : '') + stripSec(c.title);
         it.onclick = function(e){ if (e && e.stopPropagation) e.stopPropagation(); showChapter(v.name, c.n); };
         list.appendChild(it);
       });
@@ -621,7 +623,7 @@ async function showChapter(vol, ch){
     var j = await (await fetch('/api/chapter?vol='+encodeURIComponent(vol)+'&chapter='+ch)).json();
     var pane = $('read-novel').querySelector('.text-pane');
     var paras = (j.text||'').split('\n').filter(function(x){ return x.trim(); });
-    var title = (ch ? '第'+ch+'章 ' : '序 ') + j.title;
+    var title = (ch ? '第'+ch+'章 · ' : '序 · ') + stripSec(j.title);
     var html = '<div class="ch-title">'+esc(vol)+' · '+esc(title)+'</div>';
     html += paras.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
     var nav = '<div class="ch-nav"><button id="ch-prev">← 上一章</button><button id="ch-next">下一章 →</button></div>';
