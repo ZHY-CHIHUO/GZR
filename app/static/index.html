@@ -113,9 +113,11 @@
         <div class="wiki-results-top"><button class="wiki-back" id="wiki-back-home" type="button">返回百科首页</button><form class="wiki-mini-search" id="wiki-mini-search-form" role="search"><label class="sr-only" for="wiki-mini-search">搜索百科条目</label><input id="wiki-mini-search" type="search" autocomplete="off"><button type="submit">搜索</button></form></div>
         <div class="wiki-results-heading"><p class="wiki-overline" id="wiki-results-overline">CATALOGUE</p><h2 id="wiki-result-title">条目目录</h2><p id="wiki-result-count" class="wiki-result-count"></p></div>
         <div class="wiki-filter-row" id="wiki-subs"></div>
-        <div class="wiki-result-grid" id="wiki-list"></div>
+        <div class="wiki-browse-layout">
+          <aside class="wiki-entry-index" aria-label="条目索引"><div class="wiki-index-label">条目索引</div><div class="wiki-list" id="wiki-list"></div></aside>
+          <article class="wiki-detail" id="wiki-detail" aria-live="polite"><div class="empty">从左侧选择一个条目</div></article>
+        </div>
       </section>
-      <article class="wiki-detail" id="wiki-detail" hidden aria-live="polite"></article>
     </div>
   </section>
 

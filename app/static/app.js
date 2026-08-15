@@ -137,18 +137,12 @@ var SUGGEST = ['白玉蛊是怎么炼成的','十大尊者都有谁','方源为�
 var CHARS = ['方源','白凝冰','古月方正','凤九歌','武庸','龙公','星宿仙尊','巨阳仙尊','幽魂魔尊','狂蛮魔尊','盗天魔尊','乐土仙尊'];
 function renderSuggest(){
   var box = $('suggest');
-  var t1 = document.createElement('div'); t1.className='suggest-label';
-  t1.textContent = '试试问：';
-  box.appendChild(t1);
   SUGGEST.forEach(function(s){
     var c = document.createElement('span');
     c.className='chip'; c.textContent=''+s;
     c.onclick = function(){ $('q').value=s; ask(); };
     box.appendChild(c);
   });
-  var t2 = document.createElement('div'); t2.className='suggest-label suggest-label-spaced';
-  t2.textContent = '角色速查（点击提问）：';
-  box.appendChild(t2);
   CHARS.forEach(function(name){
     var c = document.createElement('span');
     c.className='chip'; c.textContent=name;

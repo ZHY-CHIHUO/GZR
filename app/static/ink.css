@@ -40,8 +40,9 @@ header{
 }
 .tab{
   border:1px solid #DDD; background:transparent; border-radius:3px;
-  padding:6px 15px; letter-spacing:1px; color:#333;
+  padding:8px 19px; letter-spacing:1px; color:#333;
   font-family:"Songti SC","SimSun",serif;
+  font-size:15.5px;
   transition:background .15s,color .15s;
 }
 .tab:hover{ background:rgba(0,0,0,.05); }
@@ -65,7 +66,7 @@ header{
   border-radius:3px;
   font-family:"Songti SC","SimSun",serif;
 }
-.rtab{ border:1px solid #DDD; background:transparent; }
+.rtab{ border:1px solid #DDD; background:transparent; font-size:14.5px; }
 .rtab.active{ background:#111; color:#F5F5F2; border-color:#111; }
 input, select, textarea{
   border-color:#DDD !important;
@@ -108,3 +109,4 @@ input, select, textarea{
 ::-webkit-scrollbar-thumb:hover{ background:#A8A8A8; }
 ::-webkit-scrollbar-track{ background:transparent; }
 ::selection{ background:rgba(192,57,43,.15); }
+.toc-title{ font-size:15px; letter-spacing:1px; }
