@@ -17,6 +17,8 @@ from pydantic import BaseModel
 from . import config, library
 from .rag import Retriever, ask_llm, build_prompt, estimate_cost, format_source, mock_answer
 
+APP_VERSION = "1.0.0"
+
 retriever: Retriever | None = None
 
 
@@ -31,7 +33,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="蛊真人 RAG", lifespan=lifespan)
+app = FastAPI(title="蛊真人 RAG", version=APP_VERSION, lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 

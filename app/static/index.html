@@ -8,13 +8,15 @@
 <link rel="stylesheet" href="/static/refine.css?v=3">
 <link rel="stylesheet" href="/static/ink.css?v=3">
 <link rel="stylesheet" href="/static/wiki-browser.css?v=4">
+<link rel="stylesheet" href="/static/premium.css?v=17">
 <script src="/static/pdfjs/pdf.min.js"></script>
 </head>
 <body>
 <header>
   <div class="logo">蛊箓 · 蛊真人维基百科</div>
   <nav>
-    <button class="tab active" data-tab="chat">问答</button>
+    <button class="tab active" data-tab="home">首页</button>
+    <button class="tab" data-tab="chat">问答</button>
     <button class="tab" data-tab="read">阅读</button>
     <button class="tab" data-tab="wiki">百科</button>
     <button class="tab" data-tab="game">游戏</button>
@@ -24,8 +26,21 @@
 </header>
 
 <main>
+  <!-- 首页：只保留标题背景与搜索 -->
+  <section id="tab-home" class="panel home-panel">
+    <div class="home-shell">
+      <section class="home-hero" aria-label="蛊真人知识库首页">
+        <div class="home-watermark" aria-hidden="true">蛊<span>真</span>人</div>
+        <div class="home-search" role="search">
+          <input id="home-q" placeholder="搜索《蛊真人》中的人物、蛊虫、剧情与设定" autocomplete="off" aria-label="搜索蛊真人知识库">
+          <button type="button" onclick="askFromHome()">搜索</button>
+        </div>
+      </section>
+    </div>
+  </section>
+
   <!-- 问答 -->
-  <section id="tab-chat" class="panel">
+  <section id="tab-chat" class="panel" hidden>
     <div class="chat-main">
       <div class="toc-pane" id="chat-nav-pane">
         <div class="toc-head"><span class="toc-title">对话</span><button class="toc-fold" onclick="toggleChatNavPane()" title="收起/展开">«</button></div>
@@ -89,10 +104,8 @@
           <div class="wiki-hero-mark" aria-hidden="true">蛊</div>
           <p class="wiki-overline">GU LU · KNOWLEDGE ARCHIVE</p>
           <h1>蛊箓百科</h1>
-          <p class="wiki-hero-copy">从人物、蛊虫到势力与仙蛊屋，检索《蛊真人》的设定资料。</p>
           <form class="wiki-searchbox" id="wiki-search-form" role="search">
-            <label class="sr-only" for="wiki-search">搜索百科条目</label>
-            <input id="wiki-search" type="search" placeholder="搜索人物、蛊虫、势力、杀招……" autocomplete="off">
+            <input id="wiki-search" type="search" aria-label="百科搜索" placeholder="搜索人物、蛊虫、势力、杀招……" autocomplete="off">
             <button type="submit">搜索</button>
           </form>
           <div class="wiki-shortcuts" id="wiki-shortcuts" aria-label="快捷搜索"></div>
@@ -106,7 +119,7 @@
         </div>
       </section>
       <section class="wiki-results" id="wiki-results" hidden aria-live="polite">
-        <div class="wiki-results-top"><button class="wiki-back" id="wiki-back-home" type="button">返回百科首页</button><form class="wiki-mini-search" id="wiki-mini-search-form" role="search"><label class="sr-only" for="wiki-mini-search">搜索百科条目</label><input id="wiki-mini-search" type="search" autocomplete="off"><button type="submit">搜索</button></form></div>
+        <div class="wiki-results-top"><button class="wiki-back" id="wiki-back-home" type="button">返回百科首页</button><form class="wiki-mini-search" id="wiki-mini-search-form" role="search"><input id="wiki-mini-search" type="search" aria-label="百科搜索" autocomplete="off"><button type="submit">搜索</button></form></div>
         <div class="wiki-results-heading"><p class="wiki-overline" id="wiki-results-overline">CATALOGUE</p><h2 id="wiki-result-title">条目目录</h2><p id="wiki-result-count" class="wiki-result-count"></p></div>
         <div class="wiki-filter-row" id="wiki-subs"></div>
         <div class="wiki-browse-layout">
@@ -153,7 +166,6 @@
           </select>
           <button class="btn btn-primary" onclick="startQuiz()">开始答题</button>
           <span id="quiz-timer" class="game-timer" title="本组用时">00:00</span>
-          <span id="quiz-score" class="game-score">累计 0/0</span>
         </div>
         <div id="quiz-body" class="game-body"><div class="empty">点击「开始答题」挑战你的蛊真人知识！</div></div>
       </div>
@@ -161,7 +173,6 @@
         <div class="game-top">
           <span id="riddle-label" class="game-label">猜蛊虫</span>
           <button class="btn btn-primary" onclick="newRiddle()">来一道</button>
-          <span id="riddle-score" class="game-score">累计 0 分</span>
         </div>
         <div id="riddle-body" class="game-body"><div class="empty">点击「来一道」，根据提示猜答案！</div></div>
       </div>
@@ -334,7 +345,7 @@
 
 <div id="toast"></div>
 
-<script src="/static/app.js?v=5"></script>
-<script src="/static/wiki-browser.js?v=3"></script>
+<script src="/static/app.js?v=13"></script>
+<script src="/static/wiki-browser.js?v=4"></script>
 </body>
 </html>

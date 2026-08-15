@@ -1,0 +1,726 @@
+@font-face{
+  font-family:"CaoTanZhai Mao Local";
+  src:url("/static/fonts/CaoTanZhai-MaoZedong.ttf") format("truetype");
+  font-display:swap;
+}
+
+/* ============================================================
+   premium.css —— 《蛊箓》高级感主题层 v1「墨韵典藏」
+   叠加在 ink.css 之后：宣纸质感 · 墨色分层 · 朱砂点睛 · 印章金细节
+   只改质感不改布局；回退方式：删掉 index.html 里本文件的 link
+   ============================================================ */
+
+:root{
+  /* 在 ink.css 变量基础上精制：更暖的纸底、更沉稳的朱砂、新增印章金 */
+  --bg:#F7F5EF;             /* 宣纸白（偏暖） */
+  --card:#FDFCF8;           /* 内容卡（比底更亮半度） */
+  --ink:#10100F;            /* 正文墨：提高对比度，避免发灰 */
+  --ink-deep:#050505;       /* 标题浓墨 */
+  --muted:#5F5B55;          /* 辅助文字也压黑一档 */
+  --accent:#A93B2A;         /* 朱砂（比 C0392B 略沉，偏朱磦） */
+  --accent-deep:#8E2E20;    /* 朱砂深（hover） */
+  --accent2:#3A3A38;        /* 墨灰 */
+  --gold:#B08D5F;           /* 印章金（细节点缀） */
+  --gold-soft:rgba(176,141,95,.22);
+  --line:#DFDDD3;           /* 细线（暖灰） */
+  --line-soft:#EAE7DD;      /* 更淡的内部分隔线 */
+  --ok:#3D7A4F;
+  --warn:#8A6D1A;
+  /* 阴影系统：柔和、多层、低饱和 */
+  --sh-card:0 1px 2px rgba(28,28,26,.03), 0 4px 14px rgba(28,28,26,.05);
+  --sh-lift:0 2px 4px rgba(28,28,26,.04), 0 10px 28px rgba(28,28,26,.09);
+  --sh-modal:0 4px 12px rgba(28,28,26,.08), 0 24px 64px rgba(28,28,26,.16);
+  /* 统一微交互缓动 */
+  --ease:cubic-bezier(.2,.7,.3,1);
+}
+
+/* ---------- 全局质感 ---------- */
+html{ background:var(--bg); }
+body{
+  color:var(--ink);
+  font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif;
+  -webkit-font-smoothing:auto;
+  background:
+    radial-gradient(ellipse 60% 40% at 12% 6%, rgba(169,59,42,.018), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 88% 94%, rgba(176,141,95,.022), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(28,28,26,.008) 0, rgba(28,28,26,.008) 1px, transparent 1px, transparent 6px),
+    var(--bg);
+}
+/* UI 使用清晰的黑体；长篇阅读保留文学感宋体，但颜色更实 */
+button, input, select, textarea,
+.tab, .rtab, .btn, .tool-btn, .src-btn, .chip, .wiki-sub, .wiki-cite-chip,
+.wiki-article-tools button, .cq-kind{
+  font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC",sans-serif;
+}
+.ch-text p, .lore-p, .chapter-text p, .modal-body p{
+  font-family:"SimSun","宋体","Songti SC",serif;
+  color:#161614;
+}
+.toc-link, .ch-item, .src-excerpt, .quiz-opt, .toggle-row{ color:#20201E; }
+.meta, .field-help, .wiki-result-count, .game-toolbar-title{ color:var(--muted); }
+::selection{ background:rgba(169,59,42,.16); }
+::-webkit-scrollbar{ width:7px; height:7px; }
+::-webkit-scrollbar-thumb{ background:rgba(122,118,110,.32); border-radius:4px; }
+::-webkit-scrollbar-thumb:hover{ background:rgba(122,118,110,.5); }
+:focus-visible{ outline:1.5px solid var(--gold); outline-offset:2px; }
+
+/* ---------- 头部：毛玻璃 + 印章 ---------- */
+header{
+  position:sticky; top:0; z-index:40;
+  background:rgba(248,247,243,.82);
+  -webkit-backdrop-filter:saturate(140%) blur(14px);
+  backdrop-filter:saturate(140%) blur(14px);
+  border-bottom:1px solid var(--line);
+  box-shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 6px 18px rgba(28,28,26,.05);
+}
+.logo{ color:var(--ink-deep); }
+.logo::before{
+  content:"蛊";
+  background:linear-gradient(145deg, var(--accent), var(--accent-deep));
+  box-shadow:0 2px 6px rgba(169,59,42,.35), inset 0 0 0 1px rgba(255,255,255,.35);
+  border-radius:5px;
+}
+.tab{ transition:background .18s var(--ease), color .18s var(--ease); }
+.tab:hover{ background:rgba(28,28,26,.055); }
+.tab.active{ background:var(--ink-deep); box-shadow:0 1px 3px rgba(28,28,26,.25); }
+
+/* 状态徽标：加呼吸圆点 */
+#status{ position:relative; padding-left:18px !important; border:1px solid transparent; }
+#status::before{
+  content:""; position:absolute; left:8px; top:50%; transform:translateY(-50%);
+  width:6px; height:6px; border-radius:50%; background:currentColor;
+  box-shadow:0 0 0 0 rgba(61,122,79,.4);
+}
+#status.pill.ok::before{ animation:pulse 2.4s ease-in-out infinite; }
+@keyframes pulse{
+  0%,100%{ box-shadow:0 0 0 0 rgba(61,122,79,.35); }
+  50%{ box-shadow:0 0 0 5px rgba(61,122,79,0); }
+}
+
+/* ---------- 卡片/面板：柔和层次 + hover 上浮 ---------- */
+.card, .msg.bot, .src-card, .wiki-cat, .wiki-list, .wiki-detail,
+.read-pane .toc-pane, .read-pane .text-pane, .chat-main .toc-pane,
+.pdf-list, .game-body, .quiz-history, .settings-wrap .card, .wiki-item{
+  border-color:var(--line) !important;
+  box-shadow:var(--sh-card);
+}
+.read-pane .toc-pane:hover, .read-pane .text-pane:hover{ box-shadow:var(--sh-card); }
+.wiki-cat{ transition:transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease); }
+.wiki-cat:hover{ transform:translateY(-2px); box-shadow:var(--sh-lift); border-color:var(--gold-soft); }
+
+/* ---------- 按钮 ---------- */
+.btn-primary, #send{
+  background:linear-gradient(150deg, var(--accent), var(--accent-deep));
+  box-shadow:0 2px 8px rgba(169,59,42,.28);
+  transition:transform .12s var(--ease), box-shadow .18s var(--ease), filter .18s var(--ease);
+}
+.btn-primary:hover, #send:hover:not(:disabled){ filter:brightness(1.05); box-shadow:0 4px 14px rgba(169,59,42,.34); }
+.btn-primary:active, #send:active:not(:disabled){ transform:scale(.975); }
+.btn-ghost, .tool-btn, .src-btn, .ch-nav button, .pdf-nav button, .pdf-ch-nav button, .chip, .wiki-sub, .wiki-cite-chip{
+  transition:background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease), transform .12s var(--ease);
+}
+.btn-ghost:hover, .tool-btn:hover, .src-btn:hover, .ch-nav button:hover{ background:#F1EEE4; border-color:#CFCABB; }
+.chip:hover{ transform:translateY(-1px); }
+
+/* ---------- 问答 ---------- */
+.msg.user{
+  background:linear-gradient(150deg, #2E2E2C, #1E1E1C);
+  box-shadow:0 2px 10px rgba(28,28,26,.22);
+}
+.msg.bot{ border-left:2px solid var(--gold-soft) !important; }
+.src-card{ background:#FAF8F2; }
+.src-card .src-label{ color:var(--accent); }
+.src-card:hover{ box-shadow:var(--sh-lift); }
+.cite{ border-bottom:1px dotted var(--gold); color:var(--accent); }
+.cite:hover{ background:rgba(169,59,42,.07); }
+.wiki-cites{ border-color:var(--gold-soft) !important; background:rgba(176,141,95,.05); }
+footer.chat-bar{
+  background:rgba(253,252,248,.9);
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  border-top:1px solid var(--line);
+}
+#q{ transition:border-color .16s var(--ease), box-shadow .16s var(--ease); }
+#q:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(176,141,95,.14); }
+
+/* ---------- 阅读 ---------- */
+.rtab.active{ background:var(--ink-deep); box-shadow:0 1px 3px rgba(28,28,26,.25); }
+.toc-pane .toc-title{ letter-spacing:2px; color:var(--ink-deep); }
+.toc-link.cur{
+  color:var(--accent);
+  background:linear-gradient(90deg, rgba(169,59,42,.09), transparent);
+  border-left:2px solid var(--accent);
+  font-weight:700;
+}
+.ch-title{
+  letter-spacing:4px; color:var(--ink-deep);
+  padding-bottom:14px; margin-bottom:22px !important;
+  border-bottom:2px solid var(--gold-soft);
+  position:relative;
+}
+.ch-title::after{
+  content:""; position:absolute; left:50%; bottom:-2px; transform:translateX(-50%);
+  width:64px; height:2px; background:var(--gold);
+}
+.ch-text p{ line-height:2.15; }
+.ch-nav button:hover, .pdf-ch-nav button:hover{ border-color:var(--gold); color:var(--ink-deep); }
+.pdf-canvas-wrap{ background:linear-gradient(160deg,#3C3B38,#2E2D2A); }
+.pdf-canvas-wrap canvas{ box-shadow:0 4px 24px rgba(0,0,0,.45) !important; }
+.pdf-toolbar, .pdf-ch-nav{ background:rgba(253,252,248,.96); }
+
+/* ---------- 百科 ---------- */
+.wiki-hero-mark{
+  background:linear-gradient(145deg, var(--accent), var(--accent-deep));
+  box-shadow:0 4px 16px rgba(169,59,42,.3), inset 0 0 0 1.5px rgba(255,255,255,.35);
+}
+.wiki-hero h1{ letter-spacing:6px; color:var(--ink-deep); }
+.wiki-overline{ color:var(--gold); letter-spacing:3px; }
+.wiki-searchbox input:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(176,141,95,.14); }
+.wiki-item{ transition:background .14s var(--ease); }
+.wiki-item.active{ background:linear-gradient(90deg, rgba(169,59,42,.07), transparent) !important; box-shadow:inset 2px 0 0 var(--accent); }
+.wiki-detail .wiki-item-name, .wiki-detail-name{ letter-spacing:3px; color:var(--ink-deep); }
+.wiki-sub.active{ background:var(--ink-deep) !important; color:#F5F3EC !important; }
+
+/* ---------- 游戏 ---------- */
+.quiz-opt{ transition:background .15s var(--ease), border-color .15s var(--ease), transform .12s var(--ease); }
+.quiz-opt:hover:not(:disabled){ transform:translateX(2px); }
+.quiz-opt.selected{ box-shadow:inset 3px 0 var(--accent), var(--sh-card); }
+.riddle-hint{ border-left-color:var(--accent); box-shadow:var(--sh-card); }
+.game-timer, .game-score{ border-color:var(--line); background:var(--card); }
+.cq-item{ transition:box-shadow .18s var(--ease); }
+.cq-item:hover{ box-shadow:var(--sh-lift); }
+
+/* ---------- 设置 ---------- */
+.settings-wrap .card h3{ letter-spacing:1px; color:var(--ink-deep); }
+.step-no{
+  background:linear-gradient(145deg, var(--accent), var(--accent-deep));
+  box-shadow:0 2px 6px rgba(169,59,42,.3);
+}
+input, select, textarea{ transition:border-color .16s var(--ease), box-shadow .16s var(--ease); }
+input:focus, select:focus, textarea:focus{
+  border-color:var(--gold) !important;
+  box-shadow:0 0 0 3px rgba(176,141,95,.13) !important;
+}
+
+/* ---------- 弹窗：模糊遮罩 + 进入动画 ---------- */
+.modal-bg{
+  background:rgba(28,28,26,.38);
+  -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px);
+}
+.modal-bg.show .modal{
+  animation:modalIn .28s var(--ease) both;
+  box-shadow:var(--sh-modal);
+  border:1px solid var(--line) !important;
+}
+@keyframes modalIn{
+  from{ opacity:0; transform:translateY(14px) scale(.985); }
+  to{ opacity:1; transform:translateY(0) scale(1); }
+}
+.modal-head{ border-bottom:1px solid var(--line-soft); }
+.modal-head h2{ letter-spacing:2px; color:var(--ink-deep); }
+
+/* ---------- toast / 空状态 / 细节 ---------- */
+#toast{
+  background:rgba(28,28,26,.92);
+  box-shadow:0 8px 24px rgba(28,28,26,.3);
+  letter-spacing:.5px;
+}
+.empty{ color:var(--muted); letter-spacing:1px; }
+/* 卷名一级目录节点：墨色楷体感 */
+.toc-vol{ color:var(--ink-deep); }
+/* 资料合集标题栏线 */
+.lore-h1{ border-left-color:var(--accent) !important; }
+.lore-h2{ border-left-color:var(--gold) !important; }
+
+/* ============================================================
+   v2 可读性修订：实色百科 + 对话依据/相关词条强化
+   ============================================================ */
+
+/* 去掉毛玻璃：顶栏与百科区域都改为实色宣纸，不透明、不模糊 */
+header{
+  background:#F8F7F3;
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+}
+#tab-wiki,
+#tab-wiki .wiki-browser,
+#tab-wiki .wiki-home,
+#tab-wiki .wiki-home-body,
+#tab-wiki .wiki-results,
+#tab-wiki .wiki-results-top,
+#tab-wiki .wiki-entry-index,
+#tab-wiki .wiki-list,
+#tab-wiki .wiki-detail{
+  -webkit-backdrop-filter:none !important;
+  backdrop-filter:none !important;
+}
+#tab-wiki{ background:#F4F2EC !important; }
+#tab-wiki .wiki-browser{
+  background:#FBFAF6 !important;
+  border:1px solid #D6D2C6;
+  box-shadow:none !important;
+}
+#tab-wiki .wiki-hero{
+  background:#FDFCF8 !important;
+  border-bottom-color:#BDB7A8 !important;
+}
+#tab-wiki .wiki-home-body,
+#tab-wiki .wiki-results,
+#tab-wiki .wiki-results-top,
+#tab-wiki .wiki-detail{ background:#FDFCF8 !important; }
+#tab-wiki .wiki-entry-index,
+#tab-wiki .wiki-list{ background:#F2F0E9 !important; box-shadow:none !important; }
+#tab-wiki .wiki-category-card,
+#tab-wiki .wiki-entry-card,
+#tab-wiki .wiki-index-item,
+#tab-wiki .wiki-detail{
+  box-shadow:none !important;
+  filter:none !important;
+}
+#tab-wiki .wiki-category-card:hover,
+#tab-wiki .wiki-entry-card:hover{
+  transform:none;
+  box-shadow:none !important;
+}
+
+/* 问答：相关词条与依据来源提高字号、字重和红色对比度 */
+.msg.bot .src-card{ padding:11px 13px; font-size:14px; }
+.msg.bot .src-label{
+  color:#7F281C;
+  font-size:14.5px;
+  font-weight:800;
+  letter-spacing:.6px;
+}
+.msg.bot .src-btn{
+  color:#252522;
+  font-size:13.5px;
+  font-weight:600;
+  padding:4px 10px;
+}
+.msg.bot .src-excerpt{
+  color:#242421;
+  font-size:13.5px;
+  line-height:1.85;
+}
+.msg.bot .wiki-cites{ padding:10px 13px; gap:8px; }
+.msg.bot .wiki-cites-label{
+  color:#3E3A35;
+  font-size:13.5px;
+  font-weight:800;
+  letter-spacing:1px;
+}
+.msg.bot .wiki-cite-chip{
+  color:#7F281C;
+  border-color:#C8A99F;
+  font-size:14px;
+  font-weight:700;
+  padding:5px 12px;
+}
+.msg.bot .wiki-cite-chip:hover{
+  color:#FFF;
+  background:#8E2E20;
+  border-color:#8E2E20;
+}
+.msg.bot .cite{
+  color:#7F281C;
+  font-size:14.5px;
+  font-weight:800;
+}
+
+/* ============================================================
+   v3 百科交互修订：取消悬浮效果 + 最近搜索
+   ============================================================ */
+
+/* 删除 hero 右下角“第一卷 · 设定档案”装饰文字 */
+#tab-wiki .wiki-hero::after{ content:none !important; display:none !important; }
+
+/* 百科分类/条目卡片保持静态：不抬升、不变黑、不加阴影 */
+#tab-wiki .wiki-category-card,
+#tab-wiki .wiki-entry-card{
+  transition:none !important;
+  transform:none !important;
+  box-shadow:none !important;
+}
+#tab-wiki .wiki-category-card,
+#tab-wiki .wiki-category-card:nth-child(n){
+  background:#F3F1EA !important;
+  color:#171715 !important;
+}
+#tab-wiki .wiki-entry-card{ background:#FDFCF8 !important; color:#171715 !important; }
+#tab-wiki .wiki-category-card:hover,
+#tab-wiki .wiki-category-card:focus,
+#tab-wiki .wiki-entry-card:hover,
+#tab-wiki .wiki-entry-card:focus{
+  background:inherit !important;
+  color:#171715 !important;
+  transform:none !important;
+  box-shadow:none !important;
+}
+/* inherit 在 button 上会拿到 grid 背景，重新锁定静态底色 */
+#tab-wiki .wiki-category-card:hover,
+#tab-wiki .wiki-category-card:focus{ background:#F3F1EA !important; }
+#tab-wiki .wiki-entry-card:hover,
+#tab-wiki .wiki-entry-card:focus{ background:#FDFCF8 !important; }
+#tab-wiki .wiki-category-card:hover .wiki-category-index,
+#tab-wiki .wiki-category-card:focus .wiki-category-index{ color:var(--accent) !important; }
+#tab-wiki .wiki-category-card:hover strong,
+#tab-wiki .wiki-category-card:focus strong{ color:#171715 !important; }
+#tab-wiki .wiki-category-card:hover span:not(.wiki-category-index):not(.wiki-card-mark),
+#tab-wiki .wiki-category-card:focus span:not(.wiki-category-index):not(.wiki-card-mark),
+#tab-wiki .wiki-category-card:hover i,
+#tab-wiki .wiki-category-card:focus i{ color:#6E6A63 !important; }
+#tab-wiki .wiki-category-card:hover .wiki-card-mark,
+#tab-wiki .wiki-category-card:focus .wiki-card-mark{ color:rgba(0,0,0,.055) !important; }
+#tab-wiki .wiki-entry-card:hover .wiki-card-copy,
+#tab-wiki .wiki-entry-card:focus .wiki-card-copy{ color:#55514B !important; }
+#tab-wiki .wiki-entry-card:hover .wiki-card-link,
+#tab-wiki .wiki-entry-card:focus .wiki-card-link{ color:#171715 !important; }
+#tab-wiki .wiki-searchbox{ box-shadow:none !important; }
+
+/* 搜索框下方：最近搜索（实时更新、本地保存、可清除） */
+#tab-wiki .wiki-shortcuts{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:14px;
+}
+#tab-wiki .wiki-recent-label{
+  color:#4B4843;
+  font-size:12.5px;
+  font-weight:700;
+  letter-spacing:1px;
+  margin-right:2px;
+}
+#tab-wiki .wiki-shortcuts button{
+  border:1px solid #D7D2C7;
+  border-radius:3px;
+  background:#FDFCF8;
+  color:#3E3B36;
+  padding:4px 10px;
+  font:13px "Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+}
+#tab-wiki .wiki-shortcuts button::before{ content:none !important; }
+#tab-wiki .wiki-shortcuts button:hover{
+  background:#F3F1EA;
+  border-color:#BDB6A7;
+  color:#171715;
+}
+#tab-wiki .wiki-shortcuts .wiki-recent-clear{
+  border:0;
+  background:transparent;
+  color:#7F281C;
+  padding:4px 6px;
+  font-weight:700;
+}
+#tab-wiki .wiki-shortcuts .wiki-recent-clear:hover{
+  background:transparent;
+  color:#5F1C13;
+}
+
+/* ============================================================
+   首页：简洁一屏 · 不滚动
+   ============================================================ */
+.home-panel{
+  overflow:hidden;
+  background:#F3F1EA;
+}
+.home-shell{
+  width:min(1440px,100%);
+  height:100%;
+  margin:0 auto;
+  padding:28px clamp(20px,4vw,56px) 18px;
+  display:flex;
+  flex-direction:column;
+  box-sizing:border-box;
+}
+.home-hero{
+  position:relative;
+  overflow:hidden;
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:clamp(40px,5.5vw,76px) clamp(28px,6vw,96px);
+  border:1px solid #D4CFC1;
+  border-top:3px solid #1B1B19;
+  background:#FCFBF7;
+}
+.home-hero::before{
+  /* 本机无草书。优先方正舒体（更飘逸），其次华文行楷 */
+  content:"蛊真人";
+  position:absolute;
+  z-index:0;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  height:100%;
+  color:#DDD6C6;
+  writing-mode:horizontal-tb;
+  white-space:nowrap;
+  font-family:"FZShuTi","方正舒体","STXingkai","华文行楷","LiSu","隶书","KaiTi",cursive;
+  font-weight:400;
+  font-size:min(28vw, 36vh);
+  line-height:.86;
+  letter-spacing:.06em;
+  pointer-events:none;
+  user-select:none;
+}
+.home-hero::after{
+  content:"卷 · 藏 · 问 · 读";
+  position:absolute;
+  right:clamp(28px,5vw,80px);
+  top:28px;
+  color:#A93B2A;
+  font:700 10px/1 "Microsoft YaHei",sans-serif;
+  letter-spacing:4px;
+}
+.home-hero > *{ position:relative; z-index:1; }
+.home-search{
+  position:relative;
+  z-index:2;
+  box-shadow:0 10px 28px rgba(27,27,25,.08);
+}
+
+/* 背景题字统一使用用户提供的毛体；正文与功能文字仍使用易读字体。 */
+#tab-wiki .wiki-hero::before,
+#tab-wiki .wiki-card-mark{
+  font-family:"CaoTanZhai Mao Local","KaiTi","STKaiti",cursive !important;
+  font-weight:400 !important;
+}
+
+/* ============================================================
+   首页最终减法：横排《蛊真人》背景 + 一条悬浮搜索框
+   ============================================================ */
+.home-panel{
+  overflow:hidden !important;
+  background:#F3F1EA;
+}
+.home-shell{
+  width:min(1440px,100%);
+  height:100%;
+  margin:0 auto;
+  padding:clamp(18px,2.5vw,38px);
+  box-sizing:border-box;
+}
+.home-hero{
+  position:relative;
+  display:block;
+  width:100%;
+  height:100%;
+  min-height:0;
+  overflow:hidden;
+  padding:0;
+  border:1px solid #D4CFC1;
+  background:#FCFBF7;
+}
+.home-hero::before{ content:none!important; display:none!important; }
+/* 真实文字元素：用 JS 精确测量字号，完整铺满而不越界 */
+.home-watermark{
+  position:absolute;
+  z-index:0;
+  left:50%;
+  top:50%;
+  display:block;
+  width:max-content;
+  height:max-content;
+  margin:0;
+  color:#D9CEBA;
+  white-space:nowrap;
+}
+.home-watermark span{
+  color:#A93B2A;
+}
+.home-watermark{
+  /* 仅使用用户提供的草檀斋毛泽东字体；系统楷体仅作加载失败兜底 */
+  font-family:"CaoTanZhai Mao Local","KaiTi","STKaiti",cursive;
+  font-weight:400;
+  font-size:64px;
+  line-height:1;
+  letter-spacing:.03em;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  user-select:none;
+}
+.home-hero::after{ content:none; display:none; }
+.home-hero > *{ position:relative; z-index:2; }
+.home-hero-seal,.home-eyebrow,.home-hero h1,.home-lead,.home-portals,.home-footer{ display:none!important; }
+.home-search{
+  position:absolute;
+  z-index:3;
+  left:50%;
+  top:64%;
+  transform:translate(-50%,-50%);
+  display:flex;
+  width:min(760px,62vw);
+  min-height:64px;
+  border:1px solid #1B1B19;
+  background:#FFF;
+  box-shadow:0 16px 38px rgba(27,27,25,.14);
+}
+.home-search select{ display:none!important; }
+.home-search input{
+  min-width:0;
+  flex:1;
+  height:62px;
+  padding:0 22px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:#FFF!important;
+  color:#151513!important;
+  font:15px "Microsoft YaHei UI","Microsoft YaHei",sans-serif!important;
+}
+.home-search input:focus{ box-shadow:none!important; }
+.home-search button{
+  width:112px;
+  height:62px;
+  flex:none;
+  border:0;
+  border-left:1px solid #1B1B19;
+  border-radius:0;
+  background:#1B1B19;
+  color:#FFF;
+  cursor:pointer;
+  font:700 14px "Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  letter-spacing:1px;
+}
+.home-search button span{ display:none; }
+.home-search button:hover{ background:#A93B2A; }
+.home-hero-seal{
+  width:40px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  margin-bottom:20px;
+  color:#FFF;
+  background:#A93B2A;
+  border:1px solid #7D281C;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.32);
+  font:700 22px/1 "KaiTi","STKaiti",serif;
+}
+.home-eyebrow{
+  margin:0 0 14px;
+  color:#8E2E20;
+  font:700 10px/1.2 "Microsoft YaHei",sans-serif;
+  letter-spacing:3px;
+}
+.home-hero h1{
+  max-width:850px;
+  margin:0 0 28px;
+  color:#10100F;
+  font:700 clamp(40px,5.4vw,76px)/1.08 "KaiTi","STKaiti","SimSun",serif;
+  letter-spacing:clamp(2px,.6vw,8px);
+}
+.home-search{
+  display:flex;
+  width:min(680px,100%);
+  min-height:52px;
+  border:1px solid #1B1B19;
+  background:#FFF;
+}
+.home-search select{
+  width:120px;
+  flex:none;
+  border:0!important;
+  border-right:1px solid #D4CFC1!important;
+  border-radius:0!important;
+  background:#F5F3EC!important;
+  color:#272522;
+  font-size:13px!important;
+}
+.home-search input{
+  min-width:0;
+  flex:1;
+  padding:0 18px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:#FFF!important;
+  color:#171715!important;
+  font:15px "Microsoft YaHei UI","Microsoft YaHei",sans-serif!important;
+}
+.home-search input:focus{ box-shadow:none!important; }
+.home-search button{
+  width:132px;
+  flex:none;
+  border:0;
+  border-left:1px solid #1B1B19;
+  border-radius:0;
+  background:#1B1B19;
+  color:#FFF;
+  cursor:pointer;
+  font:700 14px "Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  letter-spacing:.5px;
+}
+.home-search button span{ margin-left:8px; color:#D2AF78; font-size:18px; }
+.home-search button:hover{ background:#A93B2A; }
+
+.home-portals{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  flex:none;
+  margin-top:20px;
+  border:1px solid #D4CFC1;
+  background:#FCFBF7;
+}
+.home-portal{
+  position:relative;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  min-height:110px;
+  gap:14px;
+  padding:22px 24px;
+  border:0;
+  border-right:1px solid #DCD7CB;
+  background:transparent;
+  color:#1B1B19;
+  cursor:pointer;
+  text-align:left;
+  transition:none!important;
+}
+.home-portal:last-child{ border-right:0; }
+.home-portal::before{
+  content:"";
+  position:absolute;
+  left:20px;
+  top:16px;
+  width:20px;
+  height:2px;
+  background:#B08D5F;
+}
+.home-portal:hover,
+.home-portal:focus{ background:#F1EEE5; color:#1B1B19; transform:none!important; box-shadow:none!important; }
+.home-portal.portal-chat{ background:#1B1B19; color:#FFF; }
+.home-portal.portal-chat:hover,
+.home-portal.portal-chat:focus{ background:#2A2926; color:#FFF; }
+.home-portal.portal-chat::before{ background:#D2AF78; }
+.portal-no{
+  align-self:start;
+  color:#9A9388;
+  font:700 10px/1 Georgia,serif;
+  letter-spacing:1px;
+}
+.portal-chat .portal-no{ color:#C6B796; }
+.portal-mark{ display:none; }
+.portal-body{ display:flex; flex-direction:column; gap:6px; }
+.portal-body b{ font:700 20px/1 "KaiTi","STKaiti","SimSun",serif; letter-spacing:1px; }
+.portal-body small{ color:#726C62; font:12px/1.5 "Microsoft YaHei UI","Microsoft YaHei",sans-serif; }
+.portal-chat .portal-body small{ color:#D3CDC0; }
+.home-portal > i{ color:#A93B2A; font:normal 20px/1 Georgia,serif; }
+.portal-chat > i{ color:#D2AF78; }
+
+.home-footer{
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  flex:none;
+  gap:12px;
+  padding:16px 4px 0;
+  color:#666158;
+  font-size:11.5px;
+  letter-spacing:1.1px;
+}
+.home-footer em{ color:#9A9388; font-style:normal; }
+.home-footer span:last-child{ text-align:right; color:#7B3226; }
+

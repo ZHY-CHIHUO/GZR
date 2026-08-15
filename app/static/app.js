@@ -116,15 +116,44 @@ $('read-novel').querySelector('.toc-body').addEventListener('click', function(ev
 });
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===name); });
-  ['chat','read','wiki','game','settings'].forEach(function(t){ $('tab-'+t).hidden = (t !== name); });
+  ['home','chat','read','wiki','game','settings'].forEach(function(t){ $('tab-'+t).hidden = (t !== name); });
   if (name==='read') loadLibrary().catch(function(){});
   if (name==='wiki') loadWiki();
+  if (name==='home') renderHomeState();
+}
+function fitHomeWatermark(){
+  var hero = document.querySelector('.home-hero');
+  var mark = document.querySelector('.home-watermark');
+  if (!hero || !mark || !hero.clientWidth || !hero.clientHeight) return;
+  // 以真实字体度量二分计算：尽可能大，但完整保留在首页卡片内
+  var maxW = hero.clientWidth * 0.94;
+  var maxH = hero.clientHeight * 0.82;
+  var low = 24, high = Math.max(hero.clientWidth, hero.clientHeight), best = low;
+  while (low <= high){
+    var size = Math.floor((low + high) / 2);
+    mark.style.fontSize = size + 'px';
+    if (mark.scrollWidth <= maxW && mark.scrollHeight <= maxH){ best = size; low = size + 1; }
+    else high = size - 1;
+  }
+  mark.style.fontSize = best + 'px';
+}
+function renderHomeState(){ fitHomeWatermark(); }
+function askFromHome(){
+  var input = $('home-q');
+  var question = (input && input.value || '').trim();
+  if (!question){ if (input) input.focus(); return; }
+  $('q').value = question;
+  $('scope').value = 'all';
+  if (input) input.value = '';
+  switchTab('chat');
+  ask();
 }
 async function refreshHealth(){
   initWebFallback();
   try { HEALTH = await (await fetch('/api/health')).json(); }
   catch(e){ HEALTH = null; }
   updateStatus();
+  renderHomeState();
   if (HEALTH && HEALTH.ok){
     $('api-key').value = '';
     $('base-url').value = HEALTH.base_url || 'https://api.deepseek.com';
@@ -489,7 +518,12 @@ function initPdfJs(){
   }
 }
 function getDoc(url){
-  if (!PDF_CACHE[url]) PDF_CACHE[url] = window.pdfjsLib.getDocument(url).promise;
+  if (!PDF_CACHE[url]) PDF_CACHE[url] = window.pdfjsLib.getDocument({
+    url: url,
+    cMapUrl: '/static/pdfjs/cmaps/',
+    cMapPacked: true,
+    useWorkerFetch: true,
+  }).promise;
   return PDF_CACHE[url];
 }
 function renderPdfList(pdf, chs, chsKey){
@@ -514,8 +548,14 @@ function renderPdfList(pdf, chs, chsKey){
     chs.push({title: n.title, url: pdf.url, start: n.page || 1, end: end});
   });
   (function assign(n){ if (n.children.length){ n.children.forEach(assign); n.idx = n.children[0].idx; } })(stack[0]);
+  function tocDisplayTitle(title){
+    var text = String(title || '');
+    // 人祖传目录仅显示正文标题；阅读区顶部仍保留完整章节名称
+    if (chsKey === 'rz') text = text.replace(/^人祖传[（(][^）)]+[）)]\s*[—–-]+\s*/, '');
+    return text;
+  }
   function renderNode(n){
-    var link = '<span class="toc-link" data-idx="'+n.idx+'" data-chs="'+chsKey+'">'+esc(n.title)+'</span>';
+    var link = '<span class="toc-link" data-idx="'+n.idx+'" data-chs="'+chsKey+'">'+esc(tocDisplayTitle(n.title))+'</span>';
     if (n.children.length){
       return '<details class="toc-node"><summary>'+link+'</summary>' +
         '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></details>';
@@ -887,11 +927,6 @@ function askAbout(name){
 /* ---------- 游戏：选择题 ---------- */
 var QUIZ_QS = [], QUIZ_IDX = 0, QUIZ_RIGHT = 0, QUIZ_N = 10, QUIZ_SEL = -1;
 var QUIZ_T0 = 0, QUIZ_TIMER = null;
-function quizScore(){ return {t: +(localStorage.getItem('gzr.quizTotal')||0), c: +(localStorage.getItem('gzr.quizCorrect')||0)}; }
-function updateQuizScore(){
-  var s = quizScore();
-  $('quiz-score').textContent = '累计 ' + s.c + '/' + s.t;
-}
 function quizHistory(){ try { return JSON.parse(localStorage.getItem('gzr.quizHistory') || '[]'); } catch(e){ return []; } }
 function fmtTime(sec){ sec = Math.max(0, Math.floor(sec)); var m = Math.floor(sec/60), s = sec%60; return (m<10?'0':'')+m+':'+(s<10?'0':'')+s; }
 function startQuizTimer(){
@@ -1090,15 +1125,11 @@ function confirmQuiz(){
   var right = (QUIZ_SEL === q.answer);
   q._locked = true;
   if (right) QUIZ_RIGHT++;
-  var s = quizScore();
-  s.t++; if (right) s.c++;
-  localStorage.setItem('gzr.quizTotal', s.t); localStorage.setItem('gzr.quizCorrect', s.c);
-  updateQuizScore();
   var fb = $('quiz-fb');
   fb.innerHTML = (right ? '答对了！' : '答错了，正确答案：<b>'+esc(q.options[q.answer])+'</b>') +
     '<br><span class="quiz-exp">'+esc(q.explain)+'</span>';
   var btn = $('quiz-confirm');
-  btn.textContent = (QUIZ_IDX < QUIZ_QS.length-1 ? '下一题 →' : '查看成绩');
+  btn.textContent = (QUIZ_IDX < QUIZ_QS.length-1 ? '下一题 →' : '完成本组');
   btn.onclick = function(){ renderQuizQ(); };
   document.querySelectorAll('.quiz-opt').forEach(function(b, idx){
     b.disabled = true;
@@ -1148,7 +1179,7 @@ function openGameHistory(){
   h += '</div><div class="gh-sec"><h4>猜谜记录</h4>';
   if (!rh.length) h += '<div class="gh-empty">暂无记录，猜完一道谜题后自动保存。</div>';
   else h += rh.map(function(r){
-    return '<div class="gh-row"><span>'+esc(r.d)+'</span><span>猜'+esc(rlabels[r.type]||r.type)+' · '+esc(r.name)+'</span><b class="'+(r.result==='对'?'gh-ok':'gh-bad')+'">'+esc(r.result)+(r.pts?' (+'+r.pts+')':'')+'</b><span></span></div>';
+    return '<div class="gh-row"><span>'+esc(r.d)+'</span><span>猜'+esc(rlabels[r.type]||r.type)+' · '+esc(r.name)+'</span><b class="'+(r.result==='对'?'gh-ok':'gh-bad')+'">'+esc(r.result)+'</b><span></span></div>';
   }).join('');
   h += '</div><div class="gh-clear"><button class="btn btn-ghost" onclick="clearGameHistory()">清空全部记录</button></div>';
   body.innerHTML = h;
@@ -1163,8 +1194,6 @@ function clearGameHistory(){
 
 /* ---------- 游戏：猜谜 ---------- */
 var RIDDLE = null, RIDDLE_IDX = 0, RIDDLE_TYPE = 'gu', RIDDLE_LABEL = '猜蛊虫';
-function riddleScore(){ return +(localStorage.getItem('gzr.riddleScore')||0); }
-function updateRiddleScore(){ $('riddle-score').textContent = '累计 ' + riddleScore() + ' 分'; }
 async function newRiddle(){
   $('riddle-body').innerHTML = '<div class="empty">出题中…</div>';
   try {
@@ -1178,9 +1207,9 @@ async function newRiddle(){
   } catch(e){ $('riddle-body').innerHTML = '<div class="empty">出题失败：'+esc(e.message)+'</div>'; }
 }
 function riddleHistory(){ try { return JSON.parse(localStorage.getItem('gzr.riddleHistory') || '[]'); } catch(e){ return []; } }
-function recordRiddle(ok, pts){
+function recordRiddle(ok){
   var h = riddleHistory();
-  h.unshift({d: new Date().toLocaleString('zh-CN', {hour12:false}), type: RIDDLE_TYPE, name: RIDDLE.name, result: ok ? '对' : '错', pts: pts});
+  h.unshift({d: new Date().toLocaleString('zh-CN', {hour12:false}), type: RIDDLE_TYPE, name: RIDDLE.name, result: ok ? '对' : '错'});
   if (h.length > 40) h.length = 40;
   try { localStorage.setItem('gzr.riddleHistory', JSON.stringify(h)); } catch(e){}
 }
@@ -1188,7 +1217,7 @@ function renderRiddle(){
   var html = '<div class="riddle-hints">';
   for (var i=0; i<=RIDDLE_IDX; i++) html += '<div class="riddle-hint">提示'+(i+1)+'：'+esc(RIDDLE.hints[i])+'</div>';
   html += '</div>';
-  if (RIDDLE_IDX < RIDDLE.hints.length - 1) html += '<br><button class="btn btn-ghost" onclick="moreHint()">更多提示（-1分）</button>';
+  if (RIDDLE_IDX < RIDDLE.hints.length - 1) html += '<br><button class="btn btn-ghost" onclick="moreHint()">更多提示</button>';
   html += '<div class="riddle-ask"><input id="riddle-input" placeholder="输入你的答案…" autocomplete="off"><button class="btn btn-primary" onclick="guessRiddle()">猜！</button></div>';
   html += '<div id="riddle-fb"></div>';
   $('riddle-body').innerHTML = html;
@@ -1197,25 +1226,29 @@ function renderRiddle(){
 function moreHint(){
   if (RIDDLE_IDX >= RIDDLE.hints.length - 1) return;
   RIDDLE_IDX++;
-  var s = Math.max(0, riddleScore() - 1);
-  localStorage.setItem('gzr.riddleScore', s);
-  updateRiddleScore();
   renderRiddle();
+}
+function finishRiddleMiss(fb){
+  recordRiddle(false);
+  fb.innerHTML = '没猜中，答案是：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
+  var inp = $('riddle-input'); if (inp) inp.disabled = true;
+  var guessBtn = document.querySelector('#riddle-body .riddle-ask button'); if (guessBtn) guessBtn.disabled = true;
 }
 function guessRiddle(){
   var g = ($('riddle-input').value || '').trim();
   var fb = $('riddle-fb');
-  if (!g) return;
+  // 空输入等同点击“更多提示”；全部提示已显示时则认定未猜中并公布答案
+  if (!g){
+    if (RIDDLE_IDX < RIDDLE.hints.length - 1) moreHint();
+    else finishRiddleMiss(fb);
+    return;
+  }
   var hit = (g === RIDDLE.name || RIDDLE.name.indexOf(g) >= 0 || g.indexOf(RIDDLE.name) >= 0);
   if (hit){
-    var pts = Math.max(1, 8 - RIDDLE_IDX);
-    localStorage.setItem('gzr.riddleScore', riddleScore() + pts);
-    updateRiddleScore();
-    recordRiddle(true, pts);
-    fb.innerHTML = '猜对了！+'+pts+'分　答案：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
+    recordRiddle(true);
+    fb.innerHTML = '猜对了！答案：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
   } else if (RIDDLE_IDX >= RIDDLE.hints.length - 1){
-    recordRiddle(false, 0);
-    fb.innerHTML = '没猜中，答案是：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
+    finishRiddleMiss(fb);
   } else {
     fb.innerHTML = '不对，再想想（可用「更多提示」）';
     moreHint();
@@ -1373,7 +1406,8 @@ function clearChat(){
 loadChat();
 renderChatNavList();
 renderSuggest();
+$('home-q').addEventListener('keydown', function(e){ if (e.key === 'Enter') askFromHome(); });
+window.addEventListener('resize', fitHomeWatermark);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHomeWatermark);
 refreshHealth();
 loadModels();
-updateQuizScore();
-updateRiddleScore();
