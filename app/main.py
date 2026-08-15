@@ -216,17 +216,35 @@ def ask(req: AskReq):
     hits = _force_wiki_hits(q, retriever.search(q, scope=req.scope))
     hits = hits + _retry_extra(q, hits, req.scope)
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
+    # 联网能力并入首次调用：资料库能答就答，答不了让模型直接联网（省一次调用）
+    system_w = system + (
+        "你有联网搜索工具 web_search：当【参考资料】确实没有相关内容、无法回答时，"
+        "请调用 web_search 联网搜索获取信息后回答；若资料库能回答，则不要联网。"
+        "联网回答时，回答末尾单独一行给出参考来源，格式：依据来源：[1] 网站名 网址；[2] 网站名 网址……"
+    )
     web_sources = []
     web_used = False
     combined = False
     extra_sources = []
     if config.KEY:
         try:
-            answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
-        except Exception as e:
-            return JSONResponse({"error": f"AI 调用失败：{e}"}, status_code=502)
-        # 仍说"未查到"：联网则网络回答，不联网则保留通用知识回答（首答已诚实标注）
-        if req.web_fallback and any(m in answer for m in _RETRY_MARKS):
+            if req.web_fallback:
+                from .rag import _chat_web
+                answer, cites, searched = _chat_web(
+                    system_w, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history
+                )
+            else:
+                answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
+                cites, searched = [], False
+        except Exception:
+            # 联网工具不可用等异常：退回普通资料库回答
+            try:
+                answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
+                cites, searched = [], False
+            except Exception as e:
+                return JSONResponse({"error": f"AI 调用失败：{e}"}, status_code=502)
+        # 兜底：模型没联网却仍说"未查到" → 强制联网回答
+        if not searched and req.web_fallback and any(m in answer for m in _RETRY_MARKS):
             try:
                 from .rag import ask_llm_web
                 web_system = ("你是《蛊真人》资料问答助手，当前资料库未能提供答案，请使用联网搜索获取信息，"
@@ -234,45 +252,55 @@ def ask(req: AskReq):
                               "用简体中文，要点用 **加粗** 标注；回答简洁、分点清晰；"
                               "回答末尾单独一行给出参考来源，格式：依据来源：[1] 网站名 网址；[2] 网站名 网址……（网址尽量完整），"
                               "多个来源用分号分隔；确实查不到就明确说明无法确认。")
-                web_answer, cites, searched = ask_llm_web(
-                    web_system, q, config.KEY, config.BASE_URL, config.MODEL, history=req.history
-                )
-                if web_answer:
-                    web_used = True
-                    web_sources = [{
-                        "type": "web", "label": f"网络来源{i + 1}", "url": c.get("url", ""),
-                        "title": c.get("title", ""), "excerpt": c.get("title", ""),
-                    } for i, c in enumerate(cites[:10])]
-                    # 网络回答要点反哺资料库检索：命中具体章节则整合回答
-                    extra = _web_back_to_rag(web_answer, q, req.scope)
-                    if extra:
-                        try:
-                            sys2, usr2 = build_prompt(q, extra, config.EXCERPT_CHARS)
-                            usr2 += ("\n\n注意：以上【参考资料】是补充检索的结果。"
-                                     "若这些条目与本问题无关（例如本问题涉及的不是《蛊真人》内容），"
-                                     "请在回答开头明确写『资料库未收录相关内容』，不要引用资料库条目编号，也不列『依据来源』行。"
-                                     "\n\n另附网络检索到的背景资料（仅供参考，不作为资料库依据）：\n" + web_answer[:600])
-                            merged = ask_llm(sys2, usr2, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
-                            if merged and merged.strip() and not _supplement_irrelevant(merged):
-                                combined = True
-                                answer = "（首次检索未命中，以下为结合资料库补充检索与网络检索的整合回答）\n\n" + merged
-                                extra_sources = [format_source(h) for h in extra]
-                        except Exception:
-                            combined = False
-                    if not combined:
-                        answer = "（资料库未检索到相关内容，以下为**网络检索回答**，请自行核对来源）\n\n" + web_answer
+                wa, wc, ws = ask_llm_web(web_system, q, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
+                if wa:
+                    answer, cites, searched = wa, wc, True
             except Exception:
-                web_sources = []
+                pass
+        if searched:
+            web_used = True
+            web_sources = [{
+                "type": "web", "label": f"网络来源{i + 1}", "url": c.get("url", ""),
+                "title": c.get("title", ""), "excerpt": c.get("title", ""),
+            } for i, c in enumerate(cites[:10])]
+        # 反哺检索：无论网络/资料库回答，用回答要点再查一次，命中则整合
+        try:
+            extra = _web_back_to_rag(answer, q, req.scope)
+        except Exception:
+            extra = []
+        if not searched:
+            # 资料库回答：仅当补充检索带来首轮没有的新章节才整合，普通问题不额外调用
+            extra = [h for h in extra if not any(
+                x.get("vol") == h.get("vol") and x.get("chapter") == h.get("chapter") for x in hits
+            )]
+        if extra:
+            try:
+                sys2, usr2 = build_prompt(q, extra, config.EXCERPT_CHARS)
+                usr2 += ("\n\n注意：以上【参考资料】是补充检索的结果。若这些条目与本问题无关"
+                         "（例如本问题涉及的不是《蛊真人》内容），请在回答开头明确写『资料库未收录相关内容』，"
+                         "不要引用资料库条目编号，也不列『依据来源』行。"
+                         "\n\n另附已有回答内容（仅供参考，不作为资料库依据）：\n" + answer[:600])
+                merged = ask_llm(sys2, usr2, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
+                if merged and merged.strip() and not _supplement_irrelevant(merged):
+                    combined = True
+                    extra_sources = [format_source(h) for h in extra]
+                    if web_used:
+                        answer = "（首次检索未命中，以下为结合资料库补充检索与网络检索的整合回答）\n\n" + merged
+                    else:
+                        answer = "（补充检索到更多相关章节，以下为整合回答）\n\n" + merged
+            except Exception:
+                combined = False
+        if web_used and not combined:
+            answer = "（资料库未检索到相关内容，以下为**网络检索回答**，请自行核对来源）\n\n" + answer
         mock = False
     else:
         answer = mock_answer(hits)
         mock = True
-    # 通用知识/网络回答：不展示资料库来源卡片、LLM 编造的『依据来源』行与相关词条（避免与资料库无关的误匹配）
-    gen_knowledge = not web_used and (
+    # 通用知识回答：不展示资料库来源卡片、LLM 编造的『依据来源』行与相关词条
+    gen_knowledge = not web_used and not combined and (
         "资料库未检索到相关内容" in answer or "基于通用知识的回答" in answer
     )
     if gen_knowledge:
-        import re as _re
         lines = answer.rstrip().split("\n")
         while lines and lines[-1].strip().startswith("依据来源"):
             lines.pop()
