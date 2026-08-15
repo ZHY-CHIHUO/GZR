@@ -258,6 +258,28 @@
   </div>
 </div>
 
+<!-- 百科条目编辑弹窗 -->
+<div class="modal-bg" id="wiki-edit-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h2>编辑百科条目</h2><button class="modal-x" onclick="closeModal('wiki-edit-modal')">×</button></div>
+    <div class="modal-body">
+      <div class="we-form">
+        <div class="we-row"><label>分类</label><select id="we-cat"></select></div>
+        <div class="we-row"><label>名称</label><input id="we-name" spellcheck="false"></div>
+        <div class="we-row"><label>细分</label><input id="we-sub" placeholder="可选，如：八转 / 仙蛊"></div>
+        <div class="we-row"><label>来源</label><input id="we-section" placeholder="可选，资料章节名"></div>
+        <div class="we-row"><label>描述</label><textarea id="we-desc" rows="9"></textarea></div>
+      </div>
+      <div class="we-actions">
+        <button class="btn btn-ghost" onclick="rebuildQuizFromWiki()">重建游戏题库（同步修改）</button>
+        <span class="we-spacer"></span>
+        <button class="btn btn-primary" onclick="saveWikiEntry()">保存修改</button>
+      </div>
+      <p class="we-hint">修改会直接写入资料库（wiki.json），刷新后保留；重建题库后，选择题与猜谜也会用上新资料。</p>
+    </div>
+  </div>
+</div>
+
 <!-- 游戏历史记录弹窗 -->
 <div class="modal-bg" id="game-history-modal">
   <div class="modal modal-wide">

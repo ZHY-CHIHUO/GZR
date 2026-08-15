@@ -270,6 +270,104 @@ def wiki_all():
     }
 
 
+class WikiEntryReq(BaseModel):
+    cat: str | None = None          # 新分类（移动时）
+    name: str | None = None         # 新名称（改名时）
+    old_cat: str | None = None      # 原分类
+    old_name: str | None = None     # 原名称
+    sub: str | None = None
+    section: str | None = None
+    desc: str | None = None
+    delete: bool = False
+
+
+@app.post("/api/wiki/update")
+def wiki_update(req: WikiEntryReq):
+    """编辑/删除百科条目，直接写回资料库 wiki.json（所有数据目录同步）。"""
+    _load_content()
+    path = config.DATA_DIR / "wiki.json"
+    if not path.is_file():
+        return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
+    cat = req.old_cat or req.cat
+    name = req.old_name or req.name
+    entries = data.get(cat)
+    if not isinstance(entries, list):
+        return JSONResponse({"ok": False, "error": f"分类不存在：{cat}"}, status_code=404)
+    idx = next((i for i, e in enumerate(entries) if e.get("name") == name), None)
+    if idx is None:
+        return JSONResponse({"ok": False, "error": f"条目不存在：{cat} / {name}"}, status_code=404)
+    if req.delete:
+        entries.pop(idx)
+        if not entries:
+            data.pop(cat, None)
+    else:
+        entry = entries[idx]
+        new_cat = req.cat or cat
+        new_name = (req.name or name).strip()
+        if not new_name:
+            return JSONResponse({"ok": False, "error": "名称不能为空"}, status_code=400)
+        if new_cat != cat or new_name != name:
+            entries.pop(idx)
+            target = [e for e in data.get(new_cat, []) if e.get("name") != new_name]
+            data[new_cat] = target
+            entry = dict(entry)
+            entry["name"] = new_name
+            target.append(entry)
+        else:
+            entry["name"] = new_name
+        if req.sub is not None:
+            entry["sub"] = req.sub.strip()
+        if req.section is not None:
+            entry["section"] = req.section.strip()
+        if req.desc is not None:
+            entry["desc"] = req.desc.strip()
+    write_paths = [path, config.BASE / "data" / "wiki.json"]
+    m3 = config.BASE / "data_m3" / "wiki.json"
+    if m3.is_file():
+        write_paths.append(m3)
+    for wp in write_paths:
+        try:
+            wp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception:
+            pass
+    _content_mtime["wiki"] = None  # 强制下次请求重新加载
+    if req.delete:
+        return {"ok": True, "deleted": 1}
+    return {"ok": True, "cat": req.cat or cat, "entry": entry}
+
+
+@app.post("/api/wiki/rebuild-quiz")
+def rebuild_quiz_from_wiki():
+    """从资料库重新生成题库与猜谜池（编辑资料后同步到游戏）。"""
+    import subprocess
+    import sys
+    script = config.BASE / "scripts" / "build_quiz.py"
+    if not script.is_file():
+        return JSONResponse({"ok": False, "error": "构建脚本不存在"}, status_code=404)
+    try:
+        r = subprocess.run(
+            [sys.executable, str(script)], cwd=str(config.BASE),
+            capture_output=True, text=True, timeout=180,
+        )
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"重建失败：{e}"}, status_code=500)
+    if r.returncode != 0:
+        return JSONResponse({"ok": False, "error": "重建失败：" + (r.stderr or r.stdout or "")[-200:]}, status_code=500)
+    src = config.DATA_DIR / "quiz.json"
+    dst = config.BASE / "data" / "quiz.json"
+    try:
+        if src.is_file():
+            dst.write_bytes(src.read_bytes())
+    except Exception:
+        pass
+    _content_mtime["quiz"] = None
+    return {"ok": True, "message": (r.stdout or "").strip()[-160:]}
+
+
 class QuizReq(BaseModel):
     type: str = "mix"   # mix / gu / person / type
     n: int = 10

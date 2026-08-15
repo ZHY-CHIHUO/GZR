@@ -215,6 +215,22 @@ input, select, textarea{ font-size:14.5px; }
 .cq-del:hover{ background:#FAEDE9; }
 .cq-item-opts{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .cq-item-opts span{ padding:2px 9px; border:1px solid var(--line); border-radius:3px; font-size:12.5px; color:#555; }
+/* ---- 百科条目编辑 ---- */
+.wiki-article-tools{ display:flex; align-items:center; justify-content:space-between; padding-bottom:14px; border-bottom:1px solid var(--line); }
+.wiki-article-tools button{ border:0; background:none; color:var(--ink); cursor:pointer; font:13px "Songti SC","SimSun",serif; }
+#wiki-back-results::before{ content:"← "; color:var(--accent); }
+.wiki-article-actions{ display:flex; gap:14px; }
+#wiki-edit-btn{ color:var(--accent); }
+#wiki-edit-btn::before{ content:"✎ "; }
+#wiki-del-btn{ color:#999; }
+#wiki-del-btn:hover{ color:var(--accent); }
+.we-form{ display:flex; flex-direction:column; gap:11px; }
+.we-row{ display:grid; grid-template-columns:92px minmax(0,1fr); gap:12px; align-items:start; }
+.we-row label{ padding-top:9px; font-size:13.5px; font-weight:700; color:var(--ink); }
+.we-row textarea{ min-height:120px; resize:vertical; }
+.we-actions{ display:flex; align-items:center; gap:10px; margin-top:16px; }
+.we-spacer{ flex:1; }
+.we-hint{ margin:14px 0 0; padding:10px 12px; border:1px dashed var(--line); border-radius:4px; background:#FAFAF8; color:var(--muted); font-size:12.5px; line-height:1.7; }
 .cq-item-opts span.cq-right{ background:#F2F2EF; border-color:var(--accent); color:var(--accent); font-weight:700; }
 .cq-empty{ padding:14px 0; color:var(--muted); font-size:13.5px; text-align:center; }
 #cq-import{ width:100%; min-height:132px; font-family:Consolas,Monaco,monospace; font-size:12.5px; }
