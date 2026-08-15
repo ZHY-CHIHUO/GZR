@@ -796,31 +796,45 @@ function stepChapter(delta){
   else toast(delta>0 ? '已是本卷最后一章' : '已是本卷第一章');
 }
 function renderPdfLists(pdfs){
-  var byGroup = {};
-  pdfs.forEach(function(p){ (byGroup[p.group]=byGroup[p.group]||[]).push(p); });
-  // 插图版：改成可折叠目录树（默认收起）
+  // 插图版按原版卷名分组（对照原文章节）；人祖传独立
+  var volOrder = [];
+  var volNames = {};
+  (LIB.volumes || []).forEach(function(v){ volOrder.push(v.name); volNames[v.name] = []; });
+  var groups = { '合订本': [], '人祖传': [] };
+  pdfs.forEach(function(p){
+    if (p.group === '人祖传'){ groups['人祖传'].push(p); return; }
+    var m = p.name.match(/第([一二三四五六七八九十]+)卷/);
+    var key = null;
+    if (m){
+      key = volOrder.find(function(k){ return k.indexOf('第' + m[1] + '卷') === 0; });
+    }
+    if (key){ groups[key] = groups[key] || []; groups[key].push(p); }
+    else { groups['合订本'].push(p); }
+  });
   var pane = $('read-pdf');
   pane.innerHTML = '<div class="pdf-list"></div><div class="pdf-view"><div class="empty">选择左侧 PDF 查看</div></div>';
   var list = pane.querySelector('.pdf-list');
-  Object.keys(byGroup).forEach(function(g){
-    if (g !== '插图版' && g !== '人祖传') return;
+  var order = ['合订本'].concat(volOrder);
+  order.forEach(function(g){
+    var arr = groups[g];
+    if (!arr || !arr.length) return;
     var det = document.createElement('details');
     det.className = 'toc-node lv1';
     var sum = document.createElement('summary');
     var s = document.createElement('span');
     s.className = 'toc-link';
-    s.textContent = g + '（' + byGroup[g].length + '）';
+    s.textContent = g + '（' + arr.length + '）';
     sum.appendChild(s);
     det.appendChild(sum);
     var children = document.createElement('div');
     children.className = 'toc-children';
-    byGroup[g].forEach(function(p){
+    arr.forEach(function(p){
       var it = document.createElement('div');
       it.className = 'toc-leaf';
       var dot = document.createElement('span'); dot.className = 'toc-dot';
       var link = document.createElement('span');
       link.className = 'toc-link';
-      link.textContent = p.name;
+      link.textContent = p.name.replace('蛊无删减插图版', '').replace(/（1\.\d版）/, '').trim();
       link.onclick = function(){
         list.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); });
         link.classList.add('cur');
@@ -836,9 +850,9 @@ function renderPdfLists(pdfs){
     list.appendChild(det);
   });
   if (!list.children.length) list.innerHTML = '<div class="empty">未找到 PDF</div>';
-  // 人祖传独立 pane（单个 PDF 直接显示，无需折叠）
+  // 人祖传独立 pane
   var rz = $('read-rz');
-  var rzPdf = (byGroup['人祖传']||[])[0];
+  var rzPdf = (groups['人祖传']||[])[0];
   rz.innerHTML = rzPdf
     ? '<div class="pdf-view" style="flex:1"><iframe src="'+rzPdf.url+'?_t='+Date.now()+'"></iframe></div>'
     : '<div class="empty">未找到人祖传 PDF</div>';
