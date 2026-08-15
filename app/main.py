@@ -209,13 +209,13 @@ _quiz = None
 def _load_content():
     global _wiki, _quiz
     if _wiki is None:
-        wp = config.BASE / "data" / "wiki.json"
+        wp = config.DATA_DIR / "wiki.json"
         if wp.is_file():
             _wiki = json.loads(wp.read_text(encoding="utf-8"))
         else:
             _wiki = {}
     if _quiz is None:
-        qp = config.BASE / "data" / "quiz.json"
+        qp = config.DATA_DIR / "quiz.json"
         if qp.is_file():
             _quiz = json.loads(qp.read_text(encoding="utf-8"))
         else:

@@ -22,11 +22,9 @@ CATEGORY_RULES = [
     ("其他", []),
 ]
 
-BAD_PREFIX = ("人物经历", "人物简介", "人物介绍", "来历", "经历", "简介", "介绍", "目录", "本章", "备注")
+BAD_PREFIX = ("人物经历", "人物简介", "人物介绍", "个人形象", "人物形象", "来历", "经历", "简介", "介绍", "目录", "本章", "备注")
 
 BAD_NAMES = {"它是", "这是", "那是", "他是", "她是", "可以", "因为", "所以", "但是", "如果", "其中", "所谓", "此外", "后来", "如今", "这时", "这时", "只见", "然而", "因此", "不过", "而且", "或者", "那么", "就是", "不是", "没有", "一位", "一只", "一个", "一些", "一次"}
-
-BAD_PREFIX = ("人物经历", "人物简介", "人物介绍", "来历", "经历", "简介", "介绍", "目录", "本章", "备注")
 
 
 def categorize(section):
@@ -52,6 +50,7 @@ def main():
             if not m:
                 continue
             name, desc = m.group(1).strip(), m.group(2).strip()
+            name = re.sub(r"^\d+[\.、]\s*", "", name)  # 去掉 "8.xxx" 编号前缀
             if len(name) < 2 or not desc:
                 continue
             if name in BAD_NAMES or name.startswith(BAD_PREFIX):
@@ -62,12 +61,24 @@ def main():
                 continue
             if desc.count("、") > 6 or desc.count("，") > 12:
                 continue  # 名单/列表行，非条目
+            # 条目级二次分类：仙蛊屋 / 蛊虫转数细分
+            sub = ""
+            if "仙蛊屋" in desc or "蛊屋" in desc or "仙蛊屋" in name:
+                cat = "仙蛊屋"
+            elif "仙蛊" in desc:
+                sub = "仙蛊"
+            elif re.search(r"([一二三四五六七八九十]+)转", desc):
+                m3 = re.search(r"([一二三四五六七八九十]+)转", desc)
+                sub = m3.group(1) + "转"
+            else:
+                m4 = re.search(r"蛊([一二三四五六七八九十]+)转", section)
+                sub = (m4.group(1) + "转") if m4 else "其他"
             key = (cat, name)
             if key in seen:
                 entries[cat][name]["desc"] += " " + desc
                 continue
             seen.add(key)
-            entries.setdefault(cat, {})[name] = {"name": name, "desc": desc, "section": section}
+            entries.setdefault(cat, {})[name] = {"name": name, "desc": desc, "section": section, "sub": sub}
     out = {cat: sorted(v.values(), key=lambda e: len(e["desc"]), reverse=True) for cat, v in entries.items()}
     stats = {cat: len(v) for cat, v in out.items()}
     with open(os.path.join(str(DATA_DIR), "wiki.json"), "w", encoding="utf-8") as f:

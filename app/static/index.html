@@ -118,6 +118,10 @@ mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
 .wiki-cat{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;}
 .wiki-cat:hover{background:#f5f0e6;}
 .wiki-cat.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.wiki-subs{display:flex;flex-wrap:wrap;gap:4px;padding:2px 0 4px;}
+.wiki-sub{border:1px solid var(--line);background:#faf8f3;border-radius:10px;padding:2px 8px;font-size:11px;cursor:pointer;color:#666;}
+.wiki-sub.active{background:var(--accent2);color:#fff;border-color:var(--accent2);}
+.wiki-badge{background:#f0e9da;color:#7a5c3e;border-radius:8px;padding:0 6px;font-size:11px;font-weight:400;}
 .wiki-list{width:320px;min-width:260px;border:1px solid var(--line);border-radius:10px;background:var(--card);overflow-y:auto;padding:8px;}
 .wiki-item{padding:7px 10px;border-radius:8px;cursor:pointer;border-bottom:1px solid #f0ece2;}
 .wiki-item:hover{background:#f5f0e6;}
@@ -324,6 +328,32 @@ var MODELS = [];    // 检索模型选项
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+/* 轻量 Markdown 渲染（先转义保证安全，再处理标记） */
+function mdRender(text){
+  var s = esc(text);
+  s = s.replace(/~~~([\s\S]*?)~~~/g, '<pre>$1</pre>');
+  s = s.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  s = s.replace(/^### (.*)$/gm, '<h4>$1</h4>');
+  s = s.replace(/^## (.*)$/gm, '<h3>$1</h3>');
+  s = s.replace(/^# (.*)$/gm, '<h3>$1</h3>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  s = s.replace(/\*([^*]+)\*/g, '<i>$1</i>');
+  var lines = s.split('\n');
+  var inUl = false, inOl = false, out = [];
+  lines.forEach(function(ln){
+    var ul = ln.match(/^[-*]\s+(.*)$/);
+    var ol = ln.match(/^\d+[.、]\s+(.*)$/);
+    if (ul){ if (!inUl){ out.push('<ul>'); inUl = true; } out.push('<li>'+ul[1]+'</li>'); }
+    else if (ol){ if (inUl){ out.push('</ul>'); inUl = false; } if (!inOl){ out.push('<ol>'); inOl = true; } out.push('<li>'+ol[1]+'</li>'); }
+    else { if (inUl){ out.push('</ul>'); inUl = false; } if (inOl){ out.push('</ol>'); inOl = false; } out.push(ln); }
+  });
+  if (inUl) out.push('</ul>'); if (inOl) out.push('</ol>');
+  s = out.join('\n');
+  s = s.replace(/\[(\d{1,2})\]/g, function(m, n){ return '<span class="cite" data-cite="'+n+'" title="点击跳转到对应来源">['+n+']</span>'; });
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
 function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){ t.classList.remove('show'); }, 2600); }
 function closeModal(id){ $(id).classList.remove('show'); }
 
@@ -436,10 +466,8 @@ async function ask(){
       body: JSON.stringify({question: question, scope: $('scope').value, history: HISTORY.slice(0, -1)})});
     var j = await r.json();
     if (j.error){ d.textContent = '出错了：' + j.error; return; }
-    var body = esc(j.answer).replace(/\[(\d{1,2})\]/g, function(m, n){
-      return '<span class="cite" data-cite="'+n+'" title="点击跳转到对应来源">['+n+']</span>';
-    });
-    if (j.mock){ body += '\n\n（当前为检索测试模式——配置 API Key 后可生成真正的 AI 回答）'; }
+    var body = mdRender(j.answer);
+    if (j.mock){ body += '<br><br><span style="color:#8a8577">（当前为检索测试模式——配置 API Key 后可生成真正的 AI 回答）</span>'; }
     var cost = j.mock ? '' : '<div class="meta">本次约 ¥'+j.cost_rmb+'</div>';
     d.innerHTML = body + renderSources(j.sources || []) + cost;
     HISTORY.push({role:'assistant', content: j.answer});
@@ -675,11 +703,14 @@ async function saveEmbedModel(){
 }
 
 /* ---------- 百科 ---------- */
-var WIKI = null, WIKI_CAT = '人物';
+var WIKI = null, WIKI_CAT = '人物', WIKI_SUB = '', WIKI_SUBS = {};
 async function loadWiki(){
   if (WIKI) return;
   try {
     WIKI = await (await fetch('/api/wiki')).json();
+    // 统计蛊虫子分类分布
+    WIKI_SUBS = {};
+    (WIKI.categories['蛊虫'] || []).forEach(function(e){ WIKI_SUBS[e.sub || '其他'] = (WIKI_SUBS[e.sub || '其他'] || 0) + 1; });
     renderWikiCats();
   } catch(e){ /* 忽略 */ }
 }
@@ -693,16 +724,62 @@ function renderWikiCats(){
     b.textContent = c + '（' + items.length + '）';
     b.onclick = function(){
       document.querySelectorAll('.wiki-cat').forEach(function(x){ x.classList.remove('active'); });
-      b.classList.add('active'); WIKI_CAT = c; renderWikiList(c);
+      b.classList.add('active'); WIKI_CAT = c; WIKI_SUB = ''; renderWikiSubs(); renderWikiList(c);
     };
     box.appendChild(b);
+    // 蛊虫子分类（凡蛊转数 / 仙蛊）
+    if (c === '蛊虫'){
+      var subBox = document.createElement('div');
+      subBox.className = 'wiki-subs'; subBox.id = 'wiki-subs';
+      box.appendChild(subBox);
+    }
   });
+  renderWikiSubs();
   renderWikiList(WIKI_CAT);
+}
+function renderWikiSubs(){
+  var sb = document.getElementById('wiki-subs');
+  if (!sb) return;
+  sb.innerHTML = '';
+  if (WIKI_CAT !== '蛊虫') return;
+  var order = ['一转','二转','三转','四转','五转','六转','七转','八转','九转','仙蛊','其他'];
+  var add = function(label, val){
+    var s = document.createElement('span');
+    s.className = 'wiki-sub' + (WIKI_SUB === val ? ' active' : '');
+    s.textContent = label;
+    s.onclick = function(){
+      document.querySelectorAll('.wiki-sub').forEach(function(x){ x.classList.remove('active'); });
+      s.classList.add('active'); WIKI_SUB = val; renderWikiList(WIKI_CAT);
+    };
+    sb.appendChild(s);
+  };
+  add('全部', '');
+  order.forEach(function(o){ if (WIKI_SUBS[o]) add(o + '（' + WIKI_SUBS[o] + '）', o); });
 }
 function renderWikiList(cat){
   var q = ($('wiki-search').value || '').trim();
-  var items = (WIKI.categories[cat] || []).filter(function(e){ return !q || e.name.indexOf(q) >= 0; });
   var box = $('wiki-list'); box.innerHTML = '';
+  if (q){
+    // 全局搜索：所有分类的名称/描述
+    var found = [];
+    Object.keys(WIKI.categories).forEach(function c2(c){
+      (WIKI.categories[c] || []).forEach(function(e){
+        if (e.name.indexOf(q) >= 0 || (e.desc || '').indexOf(q) >= 0) found.push({e: e, c: c});
+      });
+    });
+    found.sort(function(a, b){ return (a.e.name === q ? -1 : 0) - (b.e.name === q ? -1 : 0); });
+    found.slice(0, 300).forEach(function(f){
+      var d = document.createElement('div');
+      d.className = 'wiki-item';
+      d.innerHTML = '<div class="wiki-item-name">'+esc(f.e.name)+' <span class="wiki-badge">'+esc(f.c)+'</span></div><div class="wiki-item-desc">'+esc((f.e.desc||'').slice(0,50))+'</div>';
+      d.onclick = function(){ renderWikiDetail(f.e); };
+      box.appendChild(d);
+    });
+    box.insertAdjacentHTML('afterbegin', '<div class="empty" style="padding:6px">🔍 全局搜到 ' + found.length + ' 条（名称/描述）</div>');
+    if (!found.length) box.innerHTML = '<div class="empty">没有匹配条目</div>';
+    return;
+  }
+  var items = (WIKI.categories[cat] || []).filter(function(e){ return !WIKI_SUB || (e.sub || '其他') === WIKI_SUB; });
   items.slice(0, 800).forEach(function(e){
     var d = document.createElement('div');
     d.className = 'wiki-item';
@@ -725,7 +802,7 @@ function askAbout(name){
   $('q').value = '介绍一下' + name;
   ask();
 }
-$('wiki-search').addEventListener('input', function(){ if (WIKI_CAT) renderWikiList(WIKI_CAT); });
+$('wiki-search').addEventListener('input', function(){ renderWikiList(WIKI_CAT); });
 
 /* ---------- 游戏：选择题 ---------- */
 var QUIZ_QS = [], QUIZ_IDX = 0, QUIZ_RIGHT = 0;
