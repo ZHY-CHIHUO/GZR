@@ -846,7 +846,7 @@ function askAbout(name){
   $('q').value = '介绍一下' + name;
   ask();
 }
-$('wiki-search').addEventListener('input', function(){ renderWikiList(WIKI_CAT, true); });
+
 
 /* ---------- 游戏：选择题 ---------- */
 var QUIZ_QS = [], QUIZ_IDX = 0, QUIZ_RIGHT = 0, QUIZ_N = 10, QUIZ_SEL = -1;
