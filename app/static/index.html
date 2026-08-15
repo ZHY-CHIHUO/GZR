@@ -118,7 +118,11 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .pdf-nav button:hover{background:#f0e9da;}
 .pdf-page{font-size:12px;color:#666;}
 .pdf-canvas-wrap{flex:1;overflow:auto;padding:14px;background:#525659;}
-.pdf-canvas-wrap canvas{display:block;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,.3);background:#fff;}
+.pdf-canvas-wrap canvas{display:block;margin:0 auto 10px;box-shadow:0 2px 12px rgba(0,0,0,.3);background:#fff;}
+.pdf-ch-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-bottom:1px solid #e5e0d6;font-size:13px;background:#fffdf7;}
+.pdf-ch-nav button{border:1px solid var(--line);background:#faf8f3;border-radius:6px;padding:4px 14px;cursor:pointer;font-size:13px;color:var(--ink);}
+.pdf-ch-nav button:hover{background:#f0e9da;}
+.pdf-ch-title{font-weight:600;color:#5a4530;flex:1;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pdf-view iframe{width:100%;height:100%;border:none;}
 .lore-h{font-weight:700;color:#5a4530;margin:20px 0 8px;}
 .lore-h1{font-size:18px;border-left:4px solid #7a5c3e;padding-left:10px;}
@@ -823,16 +827,22 @@ function stepChapter(delta){
   else toast(delta>0 ? '已是本卷最后一章' : '已是本卷第一章');
 }
 var PDF_CACHE = {};
-var CUR_PDF = {url: null, page: 1};
+var PDF_CHS = [], RZ_CHS = [];
+var CUR_CHS = {idx: -1, key: '', pane: null};
 function initPdfJs(){
   if (window.pdfjsLib && !window.pdfjsLib.GlobalWorkerOptions.workerSrc){
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/pdfjs/pdf.worker.min.js';
   }
 }
-function renderPdfList(pdf){
+function getDoc(url){
+  if (!PDF_CACHE[url]) PDF_CACHE[url] = window.pdfjsLib.getDocument(url).promise;
+  return PDF_CACHE[url];
+}
+function renderPdfList(pdf, chs, chsKey){
   var toc = pdf.toc || [];
   if (!toc.length){
-    return '<div class="toc-leaf"><span class="toc-dot"></span><span class="toc-link" data-url="'+pdf.url+'" data-page="1">'+esc(pdf.name)+'</span></div>';
+    chs.push({title: pdf.name, url: pdf.url, start: 1, end: 999999});
+    return '<div class="toc-leaf"><span class="toc-dot"></span><span class="toc-link" data-idx="'+(chs.length-1)+'" data-chs="'+chsKey+'">'+esc(pdf.name)+'</span></div>';
   }
   var tree = [], stack = [{depth: -1, children: tree}];
   toc.forEach(function(it){
@@ -841,8 +851,16 @@ function renderPdfList(pdf){
     stack[stack.length - 1].children.push(node);
     stack.push(node);
   });
+  var leaves = [];
+  (function collect(n){ if (n.children.length){ n.children.forEach(collect); } else { leaves.push(n); } })(stack[0]);
+  leaves.forEach(function(n, i){
+    n.idx = chs.length;
+    var end = (i < leaves.length - 1) ? (leaves[i + 1].page - 1) : 999999;
+    chs.push({title: n.title, url: pdf.url, start: n.page || 1, end: end});
+  });
+  (function assign(n){ if (n.children.length){ n.children.forEach(assign); n.idx = n.children[0].idx; } })(stack[0]);
   function renderNode(n){
-    var link = '<span class="toc-link" data-url="'+pdf.url+'" data-page="'+(n.page||1)+'">'+esc(n.title)+'</span>';
+    var link = '<span class="toc-link" data-idx="'+n.idx+'" data-chs="'+chsKey+'">'+esc(n.title)+'</span>';
     if (n.children.length){
       return '<details class="toc-node"><summary>'+link+'</summary>' +
         '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></details>';
@@ -851,49 +869,59 @@ function renderPdfList(pdf){
   }
   return tree.map(renderNode).join('');
 }
-async function openPdf(el){
+function renderChapter(idx, chsKey, pane){
   initPdfJs();
-  var url = el.getAttribute('data-url');
-  var page = parseInt(el.getAttribute('data-page') || '1', 10);
-  var pane = el.closest('.read-pane');
-  pane.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); });
-  el.classList.add('cur');
-  CUR_PDF.url = url; CUR_PDF.page = page;
+  var chs = chsKey === 'pdf' ? PDF_CHS : RZ_CHS;
+  var ch = chs[idx];
+  if (!ch) return;
+  CUR_CHS = {idx: idx, key: chsKey, pane: pane};
   var view = pane.querySelector('.pdf-view');
-  view.innerHTML = '<div class="pdf-toolbar"><span class="pdf-title">'+esc(el.textContent)+'</span>' +
-    '<span class="pdf-nav"><button onclick="pdfPrev()">◀</button><span class="pdf-page" id="pdf-page">第 '+page+' 页</span><button onclick="pdfNext()">▶</button></span>' +
-    '<a class="dl-btn" href="'+url+'" target="_blank" style="padding:2px 10px;margin:0">↗ 原文件</a></div>' +
-    '<div class="pdf-canvas-wrap"><canvas id="pdf-canvas"></canvas></div>';
-  renderPdfPage(url, page);
+  var nav = '<div class="pdf-ch-nav">' +
+    '<button onclick="prevChapter()">← 上一章</button>' +
+    '<span class="pdf-ch-title">'+esc(ch.title)+'</span>' +
+    '<button onclick="nextChapter()">下一章 →</button>' +
+    '</div>';
+  view.innerHTML = nav + '<div class="pdf-canvas-wrap"></div>' + nav;
+  var wrap = view.querySelector('.pdf-canvas-wrap');
+  getDoc(ch.url).then(function(doc){
+    var end = Math.min(ch.end, doc.numPages);
+    (async function(){
+      for (var p = ch.start; p <= end; p++){
+        var c = document.createElement('canvas');
+        c.className = 'pdf-page-canvas';
+        wrap.appendChild(c);
+        try {
+          var page = await doc.getPage(p);
+          var viewport = page.getViewport({scale: 2.5});
+          var dpr = window.devicePixelRatio || 1;
+          c.width = Math.floor(viewport.width * dpr);
+          c.height = Math.floor(viewport.height * dpr);
+          c.style.width = '100%';
+          c.style.height = 'auto';
+          var ctx = c.getContext('2d');
+          var tr = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null;
+          await page.render({canvasContext: ctx, viewport: viewport, transform: tr}).promise;
+        } catch(e){}
+      }
+      wrap.scrollTop = 0;
+    })();
+  }).catch(function(e){ view.innerHTML = '<div class="empty">PDF 加载失败：'+esc(e.message)+'</div>'; });
+  pane.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); });
+  var target = pane.querySelector('.toc-link[data-idx="'+idx+'"]');
+  if (target) target.classList.add('cur');
 }
-async function renderPdfPage(url, page){
-  var canvas = document.getElementById('pdf-canvas');
-  if (!canvas || !window.pdfjsLib) return;
-  var pageEl = document.getElementById('pdf-page');
-  var entry = PDF_CACHE[url];
-  if (!entry){ entry = { promise: window.pdfjsLib.getDocument(url).promise }; PDF_CACHE[url] = entry; }
-  try {
-    var doc = await entry.promise;
-    var p = await doc.getPage(page);
-    var viewport = p.getViewport({scale: 2.5});
-    var dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(viewport.width * dpr);
-    canvas.height = Math.floor(viewport.height * dpr);
-    canvas.style.width = '100%';
-    canvas.style.height = 'auto';
-    var ctx = canvas.getContext('2d');
-    var transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null;
-    await p.render({canvasContext: ctx, viewport: viewport, transform: transform}).promise;
-    if (pageEl) pageEl.textContent = '第 ' + page + ' / ' + doc.numPages + ' 页';
-    if (canvas.parentElement) canvas.parentElement.scrollTop = 0;
-  } catch(e){
-    canvas.parentElement.innerHTML = '<div class="empty">PDF 加载失败：'+esc(e.message)+'</div>';
-  }
+function prevChapter(){
+  var c = CUR_CHS; if (!c.pane) return;
+  var chs = c.key === 'pdf' ? PDF_CHS : RZ_CHS;
+  if (c.idx > 0) renderChapter(c.idx - 1, c.key, c.pane);
 }
-function pdfPrev(){ if (CUR_PDF.page > 1){ CUR_PDF.page--; renderPdfPage(CUR_PDF.url, CUR_PDF.page); var pg=document.getElementById('pdf-page'); if(pg) pg.textContent='第 '+CUR_PDF.page+' 页'; } }
-function pdfNext(){ CUR_PDF.page++; renderPdfPage(CUR_PDF.url, CUR_PDF.page); var pg=document.getElementById('pdf-page'); if(pg) pg.textContent='第 '+CUR_PDF.page+' 页'; }
+function nextChapter(){
+  var c = CUR_CHS; if (!c.pane) return;
+  var chs = c.key === 'pdf' ? PDF_CHS : RZ_CHS;
+  if (c.idx < chs.length - 1) renderChapter(c.idx + 1, c.key, c.pane);
+}
 function renderPdfLists(pdfs){
-  // 插图版：直接用合订本(1.1)完整目录（前言 + 6卷 + 番外），不再额外分卷
+  PDF_CHS = [];
   var combined = pdfs.find(function(p){ return p.name.indexOf('1.1') >= 0; }) ||
                  pdfs.find(function(p){ return p.group === '插图版'; });
   var pane = $('read-pdf');
@@ -901,9 +929,8 @@ function renderPdfLists(pdfs){
     '<div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="togglePdfToc()">«</button></div>' +
     '<div class="toc-body" id="pdf-toc-body"></div></div>' +
     '<div class="text-pane"><div class="pdf-view"><div class="empty">选择左侧章节查看</div></div></div>';
-  var list = $('pdf-toc-body');
-  list.innerHTML = combined ? renderPdfList(combined) : '<div class="empty">未找到 PDF</div>';
-  // 人祖传：同样两栏
+  $('pdf-toc-body').innerHTML = combined ? renderPdfList(combined, PDF_CHS, 'pdf') : '<div class="empty">未找到 PDF</div>';
+  RZ_CHS = [];
   var rz = $('read-rz');
   var rzPdf = pdfs.find(function(p){ return p.group === '人祖传'; });
   if (rzPdf){
@@ -911,15 +938,15 @@ function renderPdfLists(pdfs){
       '<div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="toggleRzToc()">«</button></div>' +
       '<div class="toc-body" id="rz-toc-body"></div></div>' +
       '<div class="text-pane"><div class="pdf-view"><div class="empty">选择左侧章节查看</div></div></div>';
-    $('rz-toc-body').innerHTML = renderPdfList(rzPdf);
+    $('rz-toc-body').innerHTML = renderPdfList(rzPdf, RZ_CHS, 'rz');
   } else {
     rz.innerHTML = '<div class="empty">未找到人祖传 PDF</div>';
   }
   pane.dataset.loaded = '1';
-  bindPdfTocClick('pdf-toc-body', 'read-pdf');
-  bindPdfTocClick('rz-toc-body', 'read-rz');
+  bindPdfTocClick('pdf-toc-body', 'read-pdf', 'pdf');
+  bindPdfTocClick('rz-toc-body', 'read-rz', 'rz');
 }
-function bindPdfTocClick(containerId, paneId){
+function bindPdfTocClick(containerId, paneId, chsKey){
   var el = document.getElementById(containerId);
   if (!el || el.dataset.bound) return;
   el.dataset.bound = '1';
@@ -928,22 +955,10 @@ function bindPdfTocClick(containerId, paneId){
     if (t.classList && t.classList.contains('toc-link')){
       ev.preventDefault();
       ev.stopPropagation();
-      var url = t.getAttribute('data-url');
-      var page = parseInt(t.getAttribute('data-page') || '1', 10);
-      if (url) openPdfByUrl(url, page, document.getElementById(paneId), t);
+      var idx = parseInt(t.getAttribute('data-idx'), 10);
+      if (!isNaN(idx)) renderChapter(idx, chsKey, document.getElementById(paneId));
     }
   });
-}
-function openPdfByUrl(url, page, pane, el){
-  initPdfJs();
-  if (el){ pane.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); }); el.classList.add('cur'); }
-  CUR_PDF.url = url; CUR_PDF.page = page;
-  var view = pane.querySelector('.pdf-view');
-  view.innerHTML = '<div class="pdf-toolbar"><span class="pdf-title">'+esc(el ? el.textContent : '')+'</span>' +
-    '<span class="pdf-nav"><button onclick="pdfPrev()">◀</button><span class="pdf-page" id="pdf-page">第 '+page+' 页</span><button onclick="pdfNext()">▶</button></span>' +
-    '<a class="dl-btn" href="'+url+'" target="_blank" style="padding:2px 10px;margin:0">↗ 原文件</a></div>' +
-    '<div class="pdf-canvas-wrap"><canvas id="pdf-canvas"></canvas></div>';
-  renderPdfPage(url, page);
 }
 function togglePdfToc(){ var t=$('pdf-toc-pane'); t.classList.toggle('collapsed'); t.querySelector('.toc-fold').textContent = t.classList.contains('collapsed')?'»':'«'; }
 function toggleRzToc(){ var t=$('rz-toc-pane'); t.classList.toggle('collapsed'); t.querySelector('.toc-fold').textContent = t.classList.contains('collapsed')?'»':'«'; }
