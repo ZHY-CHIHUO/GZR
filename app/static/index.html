@@ -672,7 +672,8 @@ function renderWikiDetail(e){
     '<div class="wiki-detail-name">'+esc(e.name)+'</div>' +
     '<div class="wiki-detail-sec">📂 来源：'+esc(e.section)+'</div>' +
     '<div class="wiki-detail-body">'+esc(e.desc)+'</div>' +
-    '<button class="btn btn-ghost" onclick="askAbout(''+esc(e.name)+'')">💬 问 AI 关于「'+esc(e.name)+'」</button>';
+    '<button class="btn btn-ghost" id="wiki-ask-btn">💬 问 AI 关于「'+esc(e.name)+'」</button>';
+  document.getElementById('wiki-ask-btn').onclick = function(){ askAbout(e.name); };
 }
 function askAbout(name){
   switchTab('chat');
