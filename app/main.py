@@ -176,13 +176,13 @@ def ask(req: AskReq):
     hits = hits + _retry_extra(q, hits, req.scope)
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
     web_sources = []
+    web_used = False
     if config.KEY:
         try:
             answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
         except Exception as e:
             return JSONResponse({"error": f"AI 调用失败：{e}"}, status_code=502)
         # 仍说"未查到"：联网则网络回答，不联网则保留通用知识回答（首答已诚实标注）
-        web_used = False
         if req.web_fallback and any(m in answer for m in _RETRY_MARKS):
             try:
                 from .rag import ask_llm_web
@@ -207,9 +207,13 @@ def ask(req: AskReq):
     else:
         answer = mock_answer(hits)
         mock = True
+    if web_used:
+        shown_sources = web_sources
+    else:
+        shown_sources = [format_source(h) for h in hits] + web_sources
     return {
         "answer": answer,
-        "sources": [format_source(h) for h in hits] + web_sources,
+        "sources": shown_sources,
         "cost_rmb": estimate_cost(system, user, answer) if not mock else 0.0,
         "mock": mock,
         "web": web_used,
