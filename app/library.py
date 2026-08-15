@@ -104,6 +104,41 @@ def chapter_text(vol: str, chapter: int):
 _pdf_toc_cache = None
 
 
+def _combined_flat_toc():
+    """合订本(1.1)目录：用原版卷结构重建，章节通过标题匹配到合订本页码。
+    返回扁平 [{title, page, depth}]（卷=0，章=1）。"""
+    from pypdf import PdfReader
+    path = PDF_ROOT / "蛊真人" / "蛊无删减插图版（1.1版）.pdf"
+    if not path.is_file():
+        return []
+    r = PdfReader(str(path))
+    page_map = {}
+    for it in r.outline:
+        if isinstance(it, list):
+            continue
+        t = str(it.title or "")
+        m = re.match(r"^第[一二三四五六七八九十百千]+节[：:]\s*(.*)$", t)
+        if m:
+            try:
+                p = int(r.get_destination_page_number(it)) + 1
+            except Exception:
+                p = None
+            page_map[m.group(1).strip()] = p
+    out = []
+    for v in novel_volumes():
+        items = []
+        for c in v["chapters"]:
+            t = re.sub(r"^第[一二三四五六七八九十百千]+节[：:]\s*", "", c["title"]).strip()
+            pg = page_map.get(t)
+            if pg:
+                items.append((t, pg))
+        if items:
+            out.append({"title": v["name"], "page": items[0][1], "depth": 0})
+            for t, pg in items:
+                out.append({"title": t, "page": pg, "depth": 1})
+    return out
+
+
 def _normalize_toc(fn, items):
     """按标题模式重建/过滤书签层级：
     - 人祖传：只保留「人祖传（N）——」章标题
@@ -112,14 +147,7 @@ def _normalize_toc(fn, items):
     if "人祖传" in fn:
         return [it for it in items if re.match(r"^人祖传（[一二三四五六七八九十]+）——", it["title"])]
     if "1.1" in fn:
-        out = []
-        for it in items:
-            t = it["title"]
-            if re.match(r"^第[一二三四五六七八九十]+卷", t) or t.startswith("序"):
-                out.append(dict(it, depth=0))
-            elif re.match(r"^第[一二三四五六七八九十百千]+节", t):
-                out.append(dict(it, depth=1))
-        return out
+        return _combined_flat_toc()
     # 分卷 PDF：只保留 第X节 章节标题
     return [it for it in items if re.match(r"^第[一二三四五六七八九十百千]+节", it["title"])]
 
