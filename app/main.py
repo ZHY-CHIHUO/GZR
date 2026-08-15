@@ -303,6 +303,19 @@ def get_library():
 LORE_NAME = library.LORE_DOCX.name
 
 
+@app.get("/api/lore/entry")
+def lore_entry(section: str):
+    """返回设定集某小节的完整内容（供来源卡片「阅读原文」）。"""
+    p = config.DATA_DIR / "lore" / "meta.json"
+    if not p.is_file():
+        raise HTTPException(404, "设定库不存在")
+    meta = json.loads(p.read_text(encoding="utf-8"))
+    texts = [ch.get("text", "") for ch in meta if ch.get("section") == section]
+    if not texts:
+        raise HTTPException(404, "未找到该小节")
+    return {"section": section, "text": "\n\n".join(texts)}
+
+
 @app.get("/api/chapter")
 def get_chapter(vol: str, chapter: int):
     r = library.chapter_text(vol, chapter)

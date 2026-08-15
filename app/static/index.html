@@ -110,6 +110,11 @@ input:focus{border-color:var(--accent2);}
 .modal-body code{background:#f5f0e6;padding:1px 6px;border-radius:4px;font-size:12px;}
 .chapter-text p{margin:0 0 10px;line-height:2;text-indent:2em;font-size:14px;}
 mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
+.ans-sec{color:#7a5c3e;font-weight:700;margin-top:6px;}
+.ans-line{margin:2px 0;}
+.msg.bot ul,.msg.bot ol{margin:4px 0 4px 1.4em;padding:0;}
+.msg.bot li{margin:2px 0;}
+.msg.bot h3,.msg.bot h4{margin:6px 0 2px;color:#5a4530;font-size:14px;}
 .cite{color:#b08d57;font-weight:700;cursor:pointer;border-bottom:1px dotted #b08d57;}
 .cite:hover{background:#f7efdd;}
 .src-card.flash{border-color:#b08d57;background:#f7efdd;box-shadow:0 0 0 2px rgba(176,141,87,.35);}
@@ -358,7 +363,16 @@ function mdRender(text){
   });
   if (inUl) out.push('</ul>'); if (inOl) out.push('</ol>');
   s = out.join('\n');
+  // "字段标题："行（如 早年经历：/ 转世与后续：/ 依据来源：）→ 加粗主题色
+  s = s.split('\n').map(function(ln){
+    var m = ln.match(/^([^：\n]{1,14})：$/);
+    if (m) return '<div class="ans-sec">'+m[1]+'</div>';
+    var m2 = ln.match(/^([^：\n]{1,14})：(.*)$/);
+    if (m2 && ln.length <= 40 && !/^[-*\d]/.test(ln)) return '<div class="ans-line"><span class="ans-sec">'+m2[1]+'</span>：'+m2[2]+'</div>';
+    return ln;
+  }).join('\n');
   s = s.replace(/\[(\d{1,2})\]/g, function(m, n){ return '<span class="cite" data-cite="'+n+'" title="点击跳转到对应来源">['+n+']</span>'; });
+  s = s.replace(/\n{3,}/g, '\n\n');
   s = s.replace(/\n/g, '<br>');
   return s;
 }
@@ -456,13 +470,15 @@ function addMsg(html, cls){
 }
 function attrEsc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function renderSources(sources){
-  var html = '<div class="meta">依据来源（点击可展开片段 / 阅读原文 / 打开本地文件）</div>';
+  var html = '<div class="meta">依据来源：</div>';
   sources.forEach(function(s){
     var ex = (s.excerpt||'').trim();
     var exHint = ex ? attrEsc(ex.slice(0,24)) : '';
     html += '<div class="src-card" data-n="'+sources.indexOf(s)+'">' +
       '<div class="src-head"><span class="src-label">'+esc(s.label)+'</span>' +
-      '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'" data-ex="'+exHint+'">📖 阅读原文</button>' +
+      (s.type==='lore'
+        ? '<button class="src-btn" data-act="lore-read" data-sec="'+attrEsc(s.title||s.section||'')+'">📖 阅读原文</button>'
+        : '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'" data-ex="'+exHint+'">📖 阅读原文</button>') +
       (s.type==='novel' ? '<button class="src-btn" data-act="locate" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">📂 打开本地文件</button>' : '') +
       (ex ? '<button class="src-btn" data-act="toggle">🔍 展开片段</button>' : '') +
       '</div>' + (ex ? '<div class="src-excerpt">'+esc(ex)+'</div>' : '') + '</div>';
@@ -496,7 +512,9 @@ $('chat').addEventListener('click', function(ev){
   var el = ev.target;
   if (el.classList && el.classList.contains('cite')){
     var n = parseInt(el.dataset.cite, 10);
-    var cards = document.querySelectorAll('#chat .src-card');
+    // 只在本条消息内查找对应来源（避免跳去上一条回答）
+    var msg = el.closest('.msg');
+    var cards = msg ? msg.querySelectorAll('.src-card') : [];
     var card = cards[n - 1];
     if (card){
       card.scrollIntoView({behavior:'smooth', block:'center'});
@@ -518,6 +536,9 @@ $('chat').addEventListener('click', function(ev){
   else if (btn.dataset.act === 'locate'){
     locateFile(btn.dataset.vol, parseInt(btn.dataset.ch, 10));
   }
+  else if (btn.dataset.act === 'lore-read'){
+    readLore(btn.dataset.sec);
+  }
 });
 
 /* ---------- 来源 → 定位原文 ---------- */
@@ -530,25 +551,32 @@ async function readChapter(vol, ch, excerptHint){
     var paras = (j.text||'').split('\n').filter(function(x){ return x.trim(); });
     var html = paras.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
     var box = $('cm-text'); box.innerHTML = html;
-    var note = '';
     if (excerptHint){
       var probe = excerptHint.slice(0, 24);
       var idx = (j.text||'').indexOf(probe);
       if (idx >= 0){
+        // 定位到引用片段附近（不做高亮）
         var ps = box.querySelectorAll('p');
         var acc = 0;
         for (var i=0;i<ps.length;i++){
           acc += ps[i].textContent.length + 1;
-          if (acc > idx){
-            ps[i].innerHTML = '<mark>'+ps[i].textContent+'</mark>';
-            note = '<div class="meta" style="margin-bottom:10px">🟡 黄色高亮 = AI 引用的原文片段（所在段落）</div>';
-            box.scrollTop = ps[i].offsetTop - 20;
-            break;
-          }
+          if (acc > idx){ box.scrollTop = Math.max(0, ps[i].offsetTop - 60); break; }
         }
       }
     }
-    if (note) box.insertAdjacentHTML('afterbegin', note);
+    $('chapter-modal').classList.add('show');
+  } catch(e){ toast('加载失败：'+e.message); }
+}
+
+async function readLore(section){
+  try {
+    var r = await fetch('/api/lore/entry?section=' + encodeURIComponent(section));
+    if (!r.ok){ toast('未找到该小节'); return; }
+    var j = await r.json();
+    $('cm-title').textContent = '设定集《' + section + '》';
+    var paras = (j.text||'').split('\n').filter(function(x){ return x.trim(); });
+    $('cm-text').innerHTML = paras.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
+    $('cm-text').scrollTop = 0;
     $('chapter-modal').classList.add('show');
   } catch(e){ toast('加载失败：'+e.message); }
 }
