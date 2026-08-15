@@ -832,7 +832,7 @@ function initPdfJs(){
 function renderPdfList(pdf){
   var toc = pdf.toc || [];
   if (!toc.length){
-    return '<div class="toc-leaf"><span class="toc-dot"></span><span class="toc-link" data-url="'+pdf.url+'" data-page="1" onclick="openPdf(this)">'+esc(pdf.name)+'</span></div>';
+    return '<div class="toc-leaf"><span class="toc-dot"></span><span class="toc-link" data-url="'+pdf.url+'" data-page="1">'+esc(pdf.name)+'</span></div>';
   }
   var tree = [], stack = [{depth: -1, children: tree}];
   toc.forEach(function(it){
@@ -842,12 +842,12 @@ function renderPdfList(pdf){
     stack.push(node);
   });
   function renderNode(n){
+    var link = '<span class="toc-link" data-url="'+pdf.url+'" data-page="'+(n.page||1)+'">'+esc(n.title)+'</span>';
     if (n.children.length){
-      return '<details class="toc-node"><summary><span class="toc-link">'+esc(n.title)+'</span></summary>' +
+      return '<details class="toc-node"><summary>'+link+'</summary>' +
         '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></details>';
     }
-    return '<div class="toc-leaf"><span class="toc-dot"></span>' +
-      '<span class="toc-link" data-url="'+pdf.url+'" data-page="'+(n.page||1)+'" onclick="openPdf(this)">'+esc(n.title)+'</span></div>';
+    return '<div class="toc-leaf"><span class="toc-dot"></span>'+link+'</div>';
   }
   return tree.map(renderNode).join('');
 }
@@ -893,62 +893,57 @@ async function renderPdfPage(url, page){
 function pdfPrev(){ if (CUR_PDF.page > 1){ CUR_PDF.page--; renderPdfPage(CUR_PDF.url, CUR_PDF.page); var pg=document.getElementById('pdf-page'); if(pg) pg.textContent='第 '+CUR_PDF.page+' 页'; } }
 function pdfNext(){ CUR_PDF.page++; renderPdfPage(CUR_PDF.url, CUR_PDF.page); var pg=document.getElementById('pdf-page'); if(pg) pg.textContent='第 '+CUR_PDF.page+' 页'; }
 function renderPdfLists(pdfs){
-  var volOrder = [];
-  (LIB.volumes || []).forEach(function(v){ volOrder.push(v.name); });
-  var groups = { '合订本': [], '人祖传': [] };
-  pdfs.forEach(function(p){
-    if (p.group === '人祖传'){ groups['人祖传'].push(p); return; }
-    var m = p.name.match(/第([零一二三四五六七八九十两]+)卷/);
-    var key = m ? volOrder.find(function(k){ return k.indexOf('第' + m[1] + '卷') === 0; }) : null;
-    if (key){ groups[key] = groups[key] || []; groups[key].push(p); }
-    else { groups['合订本'].push(p); }
-  });
-  // 插图版：目录(toc-pane 可收起) + 正文(canvas)
+  // 插图版：直接用合订本(1.1)完整目录（前言 + 6卷 + 番外），不再额外分卷
+  var combined = pdfs.find(function(p){ return p.name.indexOf('1.1') >= 0; }) ||
+                 pdfs.find(function(p){ return p.group === '插图版'; });
   var pane = $('read-pdf');
   pane.innerHTML = '<div class="toc-pane" id="pdf-toc-pane">' +
     '<div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="togglePdfToc()">«</button></div>' +
     '<div class="toc-body" id="pdf-toc-body"></div></div>' +
     '<div class="text-pane"><div class="pdf-view"><div class="empty">选择左侧章节查看</div></div></div>';
   var list = $('pdf-toc-body');
-  var order = ['合订本'].concat(volOrder);
-  order.forEach(function(g){
-    var arr = groups[g];
-    if (!arr || !arr.length) return;
-    var det = document.createElement('details');
-    det.className = 'toc-node lv1';
-    var sum = document.createElement('summary');
-    var s = document.createElement('span');
-    s.className = 'toc-link';
-    s.textContent = g + '（' + (arr[0].toc && arr[0].toc.length ? arr[0].toc.length + ' 节' : arr.length) + '）';
-    sum.appendChild(s);
-    det.appendChild(sum);
-    var children = document.createElement('div');
-    children.className = 'toc-children';
-    arr.forEach(function(p){
-      var wrap = document.createElement('div');
-      wrap.innerHTML = renderPdfList(p);
-      while (wrap.firstChild) children.appendChild(wrap.firstChild);
-    });
-    det.appendChild(children);
-    list.appendChild(det);
-  });
-  if (!list.children.length) list.innerHTML = '<div class="empty">未找到 PDF</div>';
+  list.innerHTML = combined ? renderPdfList(combined) : '<div class="empty">未找到 PDF</div>';
   // 人祖传：同样两栏
   var rz = $('read-rz');
-  var rzPdf = (groups['人祖传']||[])[0];
+  var rzPdf = pdfs.find(function(p){ return p.group === '人祖传'; });
   if (rzPdf){
     rz.innerHTML = '<div class="toc-pane" id="rz-toc-pane">' +
       '<div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="toggleRzToc()">«</button></div>' +
       '<div class="toc-body" id="rz-toc-body"></div></div>' +
       '<div class="text-pane"><div class="pdf-view"><div class="empty">选择左侧章节查看</div></div></div>';
-    var rzList = $('rz-toc-body');
-    var w = document.createElement('div');
-    w.innerHTML = renderPdfList(rzPdf);
-    while (w.firstChild) rzList.appendChild(w.firstChild);
+    $('rz-toc-body').innerHTML = renderPdfList(rzPdf);
   } else {
     rz.innerHTML = '<div class="empty">未找到人祖传 PDF</div>';
   }
   pane.dataset.loaded = '1';
+  bindPdfTocClick('pdf-toc-body', 'read-pdf');
+  bindPdfTocClick('rz-toc-body', 'read-rz');
+}
+function bindPdfTocClick(containerId, paneId){
+  var el = document.getElementById(containerId);
+  if (!el || el.dataset.bound) return;
+  el.dataset.bound = '1';
+  el.addEventListener('click', function(ev){
+    var t = ev.target;
+    if (t.classList && t.classList.contains('toc-link')){
+      ev.preventDefault();
+      ev.stopPropagation();
+      var url = t.getAttribute('data-url');
+      var page = parseInt(t.getAttribute('data-page') || '1', 10);
+      if (url) openPdfByUrl(url, page, document.getElementById(paneId), t);
+    }
+  });
+}
+function openPdfByUrl(url, page, pane, el){
+  initPdfJs();
+  if (el){ pane.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); }); el.classList.add('cur'); }
+  CUR_PDF.url = url; CUR_PDF.page = page;
+  var view = pane.querySelector('.pdf-view');
+  view.innerHTML = '<div class="pdf-toolbar"><span class="pdf-title">'+esc(el ? el.textContent : '')+'</span>' +
+    '<span class="pdf-nav"><button onclick="pdfPrev()">◀</button><span class="pdf-page" id="pdf-page">第 '+page+' 页</span><button onclick="pdfNext()">▶</button></span>' +
+    '<a class="dl-btn" href="'+url+'" target="_blank" style="padding:2px 10px;margin:0">↗ 原文件</a></div>' +
+    '<div class="pdf-canvas-wrap"><canvas id="pdf-canvas"></canvas></div>';
+  renderPdfPage(url, page);
 }
 function togglePdfToc(){ var t=$('pdf-toc-pane'); t.classList.toggle('collapsed'); t.querySelector('.toc-fold').textContent = t.classList.contains('collapsed')?'»':'«'; }
 function toggleRzToc(){ var t=$('rz-toc-pane'); t.classList.toggle('collapsed'); t.querySelector('.toc-fold').textContent = t.classList.contains('collapsed')?'»':'«'; }
