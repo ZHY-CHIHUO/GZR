@@ -24,7 +24,14 @@ def main():
     ppl = wiki.get("人物", [])
 
     def excerpt(d, n):
-        return re.sub(r"\s+", " ", d).strip()[:n] + "……"
+        t = re.sub(r"\s+", " ", d).strip()
+        if len(t) <= n:
+            return t + ("……" if len(t) < len(d) else "")
+        head = t[:n]
+        cut = max(head.rfind(c) for c in "。！？；，、")
+        if cut > n * 0.4:
+            head = head[:cut + 1]
+        return head + "……"
 
     RANKS = ["一转", "二转", "三转", "四转", "五转", "六转", "七转", "八转", "九转", "仙蛊"]
 

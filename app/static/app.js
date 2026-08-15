@@ -870,7 +870,7 @@ async function startQuiz(){
     var qs = (j.questions || []).slice();
     var custom = customQuiz();
     if (custom.length){
-      var extra = custom.filter(function(c){ return type === 'mix' || c.type === type || c.type === 'mix'; });
+      var extra = custom.filter(function(c){ return c.kind !== 'riddle' && (type === 'mix' || c.type === type || c.type === 'mix'); });
       qs = qs.concat(extra);
     }
     qs = shuffleArray(qs).slice(0, QUIZ_N);
@@ -891,7 +891,11 @@ function renderCustomQuizList(){
   var list = customQuiz();
   if (!list.length){ box.innerHTML = '<div class="cq-empty">还没有自定义题目，用上面的表单添加，开始答题时会混入题库。</div>'; return; }
   var labels = {gu:'蛊虫', person:'人物', type:'蛊虫类型'};
+  var rlabels = {gu:'蛊虫', person:'人物', item:'物品'};
   box.innerHTML = list.map(function(c, i){
+    if (c.kind === 'riddle'){
+      return '<div class="cq-item"><div class="cq-item-head"><b>[猜谜·'+esc(rlabels[c.type]||c.type)+'] 谜底：'+esc(c.name)+'</b><button class="cq-del" onclick="deleteCustomQuestion('+i+')">删除</button></div><div class="cq-item-opts">'+c.hints.map(function(h){ return '<span>'+esc(h)+'</span>'; }).join('')+'</div></div>';
+    }
     return '<div class="cq-item"><div class="cq-item-head"><b>['+esc(labels[c.type]||c.type)+'] '+esc(c.q)+'</b><button class="cq-del" onclick="deleteCustomQuestion('+i+')">删除</button></div><div class="cq-item-opts">'+c.options.map(function(o, j){ return '<span'+(j === c.answer ? ' class="cq-right"' : '')+'>'+esc(o)+'</span>'; }).join('')+'</div></div>';
   }).join('');
 }
@@ -900,7 +904,26 @@ function deleteCustomQuestion(i){
   var box = $('cq-count'); if (box) box.textContent = list.length;
   renderCustomQuizList(); toast('已删除该题目');
 }
+function toggleCqKind(){
+  var kind = $('cq-kind').value;
+  $('cq-quiz-fields').hidden = kind !== 'quiz';
+  $('cq-riddle-fields').hidden = kind !== 'riddle';
+}
 function addCustomQuestion(){
+  var kind = $('cq-kind').value;
+  var list = customQuiz();
+  if (kind === 'riddle'){
+    var name = ($('cq-rname').value || '').trim();
+    var hints = [0,1,2].map(function(i){ return ($('cq-rh'+i).value || '').trim(); }).filter(Boolean);
+    if (!name){ toast('请填写谜底名称'); return; }
+    if (hints.length < 2){ toast('至少填写两条提示'); return; }
+    list.push({kind: 'riddle', type: $('cq-rtype').value, name: name, hints: hints});
+    saveCustomQuiz(list);
+    $('cq-rname').value = ''; [0,1,2].forEach(function(i){ $('cq-rh'+i).value = ''; });
+    $('cq-count').textContent = list.length;
+    renderCustomQuizList(); toast('已添加猜谜题，玩猜谜时会混入');
+    return;
+  }
   var type = $('cq-type').value;
   var q = ($('cq-q').value || '').trim();
   var opts = [0,1,2,3].map(function(i){ return ($('cq-o'+i).value || '').trim(); });
@@ -908,12 +931,41 @@ function addCustomQuestion(){
   var exp = ($('cq-exp').value || '').trim();
   if (!q || opts.some(function(o){ return !o; })){ toast('请填写题目和四个选项'); return; }
   if (opts.some(function(o, i){ return opts.indexOf(o) !== i; })){ toast('四个选项不能重复'); return; }
-  var list = customQuiz();
-  list.push({type: type, q: q, options: opts, answer: ans, explain: exp || '自定义题目'});
+  list.push({kind: 'quiz', type: type, q: q, options: opts, answer: ans, explain: exp || '自定义题目'});
   saveCustomQuiz(list);
   $('cq-q').value = ''; [0,1,2,3].forEach(function(i){ $('cq-o'+i).value = ''; }); $('cq-exp').value = '';
   $('cq-count').textContent = list.length;
   renderCustomQuizList(); toast('已添加，开始答题时会混入题库');
+}
+function importCustomQuiz(){
+  var raw = ($('cq-import').value || '').trim();
+  if (!raw){ toast('请粘贴 JSON 内容'); return; }
+  var arr;
+  try { arr = JSON.parse(raw); } catch(e){ toast('JSON 解析失败：'+e.message); return; }
+  if (!Array.isArray(arr) || !arr.length){ toast('需要是一个 JSON 数组'); return; }
+  var okQuiz = {gu:1, person:1, type:1}, okRiddle = {gu:1, person:1, item:1};
+  var added = 0, skipped = 0;
+  var list = customQuiz();
+  arr.forEach(function(item){
+    if (!item || typeof item !== 'object'){ skipped++; return; }
+    if (item.kind === 'riddle'){
+      if (item.name && Array.isArray(item.hints) && item.hints.length >= 2 && okRiddle[item.type]){
+        list.push({kind: 'riddle', type: item.type, name: String(item.name).trim(), hints: item.hints.map(String).map(function(h){ return h.trim(); })});
+        added++; return;
+      }
+      skipped++; return;
+    }
+    if (item.q && Array.isArray(item.options) && item.options.length === 4 && typeof item.answer === 'number' && item.answer >= 0 && item.answer < 4 && okQuiz[item.type]){
+      list.push({kind: 'quiz', type: item.type, q: String(item.q).trim(), options: item.options.map(String).map(function(o){ return o.trim(); }), answer: item.answer, explain: String(item.explain || 'AI 导入题目')});
+      added++; return;
+    }
+    skipped++;
+  });
+  saveCustomQuiz(list);
+  $('cq-count').textContent = list.length;
+  $('cq-import').value = '';
+  renderCustomQuizList();
+  toast('导入成功 '+added+' 条' + (skipped ? '，跳过 '+skipped+' 条格式不符' : ''));
 }
 function renderQuizQ(){
   if (QUIZ_IDX >= QUIZ_QS.length){ finishQuiz(); return; }
@@ -1016,7 +1068,11 @@ async function newRiddle(){
   $('riddle-body').innerHTML = '<div class="empty">出题中…</div>';
   try {
     var j = await (await fetch('/api/riddle', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type: RIDDLE_TYPE, n: 1})})).json();
-    RIDDLE = j.riddles[0]; RIDDLE_IDX = 0;
+    var pool = (j.riddles || []).slice();
+    var custom = customQuiz().filter(function(c){ return c.kind === 'riddle' && c.type === RIDDLE_TYPE; });
+    pool = pool.concat(custom);
+    if (!pool.length) throw new Error('谜题池为空');
+    RIDDLE = pool[Math.floor(Math.random() * pool.length)]; RIDDLE_IDX = 0;
     renderRiddle();
   } catch(e){ $('riddle-body').innerHTML = '<div class="empty">出题失败：'+esc(e.message)+'</div>'; }
 }

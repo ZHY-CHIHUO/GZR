@@ -286,7 +286,7 @@ def quiz_pick(req: QuizReq):
         pool = [x for x in pool if x["type"] == "人物"]
     elif req.type == "type":
         pool = [x for x in pool if x["type"] == "蛊虫类型"]
-    n = min(max(req.n, 1), 20)
+    n = min(max(req.n, 1), 100)
     picked = _rnd.sample(pool, min(n, len(pool)))
     for i, p in enumerate(picked):
         p = dict(p)
