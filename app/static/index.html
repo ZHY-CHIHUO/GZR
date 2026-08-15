@@ -35,8 +35,17 @@ main{flex:1;display:flex;flex-direction:column;min-height:0;}
 .nav-item{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:6px;font-size:13px;cursor:pointer;color:#444;}
 .nav-item:hover{background:#f5f0e6;}
 .nav-q{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.nav-del{border:none;background:none;color:#c9b8a0;cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;}
-.nav-del:hover{color:#c62828;}
+.nav-more{border:none;background:none;color:#c9b8a0;cursor:pointer;font-size:16px;padding:0 4px;flex-shrink:0;letter-spacing:1px;}
+.nav-more:hover{color:#7a5c3e;}
+.nav-item.arch .nav-q{color:#9a9284;text-decoration:line-through;}
+.nav-arch{margin-top:8px;}
+.nav-arch summary{cursor:pointer;font-size:12px;color:#8a8577;padding:4px 6px;list-style:none;border-radius:5px;}
+.nav-arch summary::-webkit-details-marker{display:none;}
+.nav-arch summary::before{content:'▸ ';}
+.nav-arch[open] summary::before{content:'▾ ';}
+.nav-context{display:none;position:fixed;z-index:50;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.15);padding:4px;min-width:120px;}
+.nav-context div{padding:8px 12px;font-size:13px;cursor:pointer;border-radius:6px;color:#444;}
+.nav-context div:hover{background:#f5f0e6;color:var(--accent);}
 .tool-btn{border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;color:var(--ink);}
 .tool-btn:hover{background:#f0e9da;}
 .tool-btn.full{width:100%;}
@@ -107,16 +116,18 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .lore-h2{font-size:15px;border-left:3px solid #b08d57;padding-left:8px;color:#5a4530;}
 .lore-h3{font-size:14px;color:#7a5c3e;padding-left:6px;}
 .lore-p{margin:6px 0;line-height:2;font-size:14px;color:#333;}
-.toc-node{position:relative;}
-.toc-node .toc-arrow{display:inline-block;width:14px;height:14px;cursor:pointer;color:#b08d57;font-size:11px;line-height:14px;text-align:center;user-select:none;}
-.toc-node .toc-arrow::before{content:'▸';}
-.toc-node.open .toc-arrow::before{content:'▾';}
-.toc-node .toc-dot{display:inline-block;width:14px;text-align:center;color:#ccc;font-size:8px;}
-.toc-node .toc-link{display:inline-block;padding:4px 6px;font-size:13px;cursor:pointer;border-radius:5px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;vertical-align:middle;}
-.toc-node .toc-link:hover{background:#f5f0e6;color:var(--accent);}
-.toc-node .toc-children{display:none;padding-left:16px;}
-.toc-node.open .toc-children{display:block;}
-.toc-node.leaf .toc-link{color:#777;font-size:12px;max-width:180px;}
+.toc-node{margin:1px 0;}
+.toc-node summary{list-style:none;cursor:pointer;display:flex;align-items:center;padding:4px 6px;border-radius:5px;user-select:none;}
+.toc-node summary::-webkit-details-marker{display:none;}
+.toc-node summary::before{content:'▸';color:#b08d57;margin-right:6px;font-size:11px;flex-shrink:0;}
+.toc-node[open]>summary::before{content:'▾';}
+.toc-node summary:hover{background:#f5f0e6;}
+.toc-link{display:inline-block;font-size:13px;cursor:pointer;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;vertical-align:middle;}
+.toc-link:hover{color:var(--accent);}
+.toc-node .toc-children{padding-left:18px;border-left:1px solid #f0e9da;margin-left:6px;}
+.toc-leaf{display:flex;align-items:center;padding:3px 6px;}
+.toc-dot{display:inline-block;width:12px;text-align:center;color:#d8cfbc;font-size:8px;flex-shrink:0;}
+.toc-leaf .toc-link{color:#777;font-size:12px;max-width:170px;}
 .lore-dl{margin:0 0 10px;display:inline-block;}
 .dl-btn{margin-top:10px;align-self:flex-start;border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;color:var(--ink);text-decoration:none;}
 .dl-btn:hover{background:#f0e9da;}
@@ -226,6 +237,11 @@ mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
           <input id="chat-search" placeholder="🔍 搜索记录…" autocomplete="off">
           <div id="chat-nav-list"></div>
           <button class="tool-btn full" onclick="clearChat()">🗑 清空全部</button>
+        </div>
+        <div id="nav-context" class="nav-context">
+          <div onclick="navDel()">🗑 删除</div>
+          <div onclick="navArchive()">📦 归档</div>
+          <div onclick="navRename()">✏️ 重命名</div>
         </div>
       </div>
       <div class="chat-pane">
@@ -488,10 +504,9 @@ function scrollToLore(anchor){
 }
 $('lore-toc').querySelector('.toc-body').addEventListener('click', function(ev){
   var el = ev.target;
-  if (el.classList && el.classList.contains('toc-arrow')){
-    var node = el.closest ? el.closest('.toc-node') : null;
-    if (node) node.classList.toggle('open');
-  } else if (el.classList && el.classList.contains('toc-link')){
+  if (el.classList && el.classList.contains('toc-link')){
+    ev.preventDefault();
+    ev.stopPropagation();
     var a = el.getAttribute('data-anchor');
     if (a) scrollToLore(a);
   }
@@ -536,8 +551,9 @@ function renderSuggest(){
     box.appendChild(c);
   });
 }
-function addMsg(html, cls){
+function addMsg(html, cls, cid){
   var d = document.createElement('div'); d.className='msg '+cls; d.innerHTML = html;
+  if (cid) d.dataset.cid = cid;
   $('chat').appendChild(d); $('chat').scrollTop = $('chat').scrollHeight;
   saveChat();
   return d;
@@ -547,7 +563,7 @@ function saveChat(){
   document.querySelectorAll('#chat .msg').forEach(function(m){
     if (m.id === 'no-key-guide') return;
     if (m.textContent.trim() === '思考中…') return;
-    msgs.push({cls: m.className.replace('msg ',''), html: m.innerHTML});
+    msgs.push({cls: m.className.replace('msg ',''), html: m.innerHTML, cid: m.dataset.cid || null});
   });
   if (msgs.length > 40) msgs = msgs.slice(-40);
   try { localStorage.setItem('gzr.chat', JSON.stringify(msgs)); } catch(e){}
@@ -564,6 +580,7 @@ function loadChat(){
         var d = document.createElement('div');
         d.className = 'msg ' + m.cls;
         d.innerHTML = m.html;
+        if (m.cid) d.dataset.cid = m.cid;
         $('chat').appendChild(d);
       });
       $('chat').scrollTop = $('chat').scrollHeight;
@@ -592,7 +609,7 @@ async function ask(){
   var question = $('q').value.trim(); if (!question) return;
   $('q').value=''; $('send').disabled = true;
   HISTORY.push({role:'user', content: question});
-  addMsg(esc(question), 'user');
+  addMsg(esc(question), 'user', String(Date.now()));
   renderChatNavList();
   var d = addMsg('思考中…', 'bot');
   try {
@@ -1075,12 +1092,10 @@ function renderLore(){
   function renderNode(n){
     var html = '';
     if (n.children.length){
-      html += '<div class="toc-node open">' +
-        '<span class="toc-arrow" data-act="toggle"></span>' +
-        '<span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span>' +
-        '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></div>';
+      html += '<details class="toc-node" open><summary><span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span></summary>' +
+        '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></details>';
     } else {
-      html += '<div class="toc-node leaf"><span class="toc-dot"></span>' +
+      html += '<div class="toc-leaf"><span class="toc-dot"></span>' +
         '<span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span></div>';
     }
     return html;
@@ -1119,17 +1134,32 @@ function toggleChatNavPane(){
   var btn = t.querySelector('.toc-fold');
   btn.textContent = t.classList.contains('collapsed') ? '»' : '«';
 }
+function chatMeta(){ try { return JSON.parse(localStorage.getItem('gzr.chatMeta') || '{}'); } catch(e){ return {}; } }
+function saveChatMeta(m){ try { localStorage.setItem('gzr.chatMeta', JSON.stringify(m)); } catch(e){} }
 function renderChatNavList(){
   var q = ($('chat-search').value || '').trim();
+  var meta = chatMeta();
   var users = document.querySelectorAll('#chat .msg.user');
-  var html = '';
+  var active = [], archived = [];
   users.forEach(function(m, i){
-    var txt = m.textContent.trim();
-    if (q && txt.indexOf(q) < 0) return;
-    html += '<div class="nav-item"><span class="nav-q" onclick="scrollToMsg('+i+')" title="'+esc(txt)+'">'+esc(txt.slice(0, 24))+'</span>' +
-      '<button class="nav-del" onclick="delMsg('+i+')" title="删除这条">×</button></div>';
+    var cid = m.dataset.cid || ('i' + i);
+    var title = (meta[cid] && meta[cid].title) || m.textContent.trim().slice(0, 22);
+    if (q && title.indexOf(q) < 0 && m.textContent.indexOf(q) < 0) return;
+    var it = {i: i, cid: cid, title: title};
+    (meta[cid] && meta[cid].archived ? archived : active).push(it);
   });
+  var html = active.map(function(it){ return navItemHtml(it, meta); }).join('');
+  if (archived.length){
+    html += '<details class="nav-arch"><summary>🗂 已归档（' + archived.length + '）</summary>' +
+      archived.map(function(it){ return navItemHtml(it, meta, true); }).join('') + '</details>';
+  }
   $('chat-nav-list').innerHTML = html || '<div class="empty" style="padding:12px">暂无记录</div>';
+}
+function navItemHtml(it, meta, isArch){
+  var t = (meta[it.cid] && meta[it.cid].title) || it.title;
+  return '<div class="nav-item'+(isArch?' arch':'')+'">' +
+    '<span class="nav-q" onclick="scrollToMsg('+it.i+')" title="'+esc(t)+'">'+esc(t)+'</span>' +
+    '<button class="nav-more" onclick="navMenu(event, \''+it.cid+'\', '+it.i+')">⋮</button></div>';
 }
 $('chat-search').addEventListener('input', renderChatNavList);
 function scrollToMsg(i){
@@ -1147,6 +1177,39 @@ function delMsg(i){
   saveChat();
   renderChatNavList();
 }
+var NAV_CTX = {cid: null, i: -1};
+function navMenu(ev, cid, i){
+  ev.stopPropagation();
+  NAV_CTX.cid = cid; NAV_CTX.i = i;
+  var m = $('nav-context');
+  var r = ev.target.getBoundingClientRect();
+  m.style.top = (r.bottom + 4) + 'px';
+  m.style.left = Math.max(8, r.right - 90) + 'px';
+  m.style.display = 'block';
+}
+function closeNavMenu(){ $('nav-context').style.display = 'none'; }
+document.addEventListener('click', function(ev){ if (!ev.target.closest || !ev.target.closest('.nav-more')) closeNavMenu(); });
+function navArchive(){
+  var meta = chatMeta();
+  meta[NAV_CTX.cid] = meta[NAV_CTX.cid] || {};
+  meta[NAV_CTX.cid].archived = !meta[NAV_CTX.cid].archived;
+  saveChatMeta(meta);
+  renderChatNavList();
+  closeNavMenu();
+  toast(meta[NAV_CTX.cid].archived ? '已归档' : '已恢复');
+}
+function navRename(){
+  var meta = chatMeta();
+  var cur = (meta[NAV_CTX.cid] && meta[NAV_CTX.cid].title) || '';
+  var t = prompt('给这条对话命名：', cur);
+  if (t === null) { closeNavMenu(); return; }
+  meta[NAV_CTX.cid] = meta[NAV_CTX.cid] || {};
+  if (t.trim()) meta[NAV_CTX.cid].title = t.trim(); else delete meta[NAV_CTX.cid].title;
+  saveChatMeta(meta);
+  renderChatNavList();
+  closeNavMenu();
+}
+function navDel(){ delMsg(NAV_CTX.i); closeNavMenu(); }
 function clearChat(){
   if (!confirm('确定清空所有聊天记录吗？')) return;
   try { localStorage.removeItem('gzr.chat'); localStorage.removeItem('gzr.chatHistory'); } catch(e){}
