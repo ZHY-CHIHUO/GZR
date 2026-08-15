@@ -56,8 +56,11 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .toc-fold{border:1px solid var(--line);background:#faf8f3;border-radius:6px;padding:1px 8px;cursor:pointer;font-size:12px;color:var(--ink);}
 .toc-fold:hover{background:#f0e9da;}
 .toc-body{overflow-y:auto;max-height:100%;}
-#read-novel .toc-pane.collapsed{width:0;min-width:0;padding:0;border:none;overflow:hidden;}
+#read-novel .toc-pane{transition:width .2s ease;}
+#read-novel .toc-pane.collapsed{width:30px;min-width:30px;padding:6px 4px;}
 #read-novel .toc-pane.collapsed .toc-body{display:none;}
+#read-novel .toc-pane.collapsed .toc-title{display:none;}
+#read-novel .toc-pane.collapsed .toc-fold{border:none;background:transparent;font-size:16px;padding:2px 4px;}
 .toc-chapters{display:none;padding-left:12px;}
 .toc-vol.open .toc-chapters{display:block;}
 .ch-item{padding:3px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -199,11 +202,10 @@ mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
       <button class="rtab" data-rt="pdf">🖼️ 插图版</button>
       <button class="rtab" data-rt="rz">📜 人祖传</button>
       <button class="rtab" data-rt="lore">📚 资料合集</button>
-      <button class="btn btn-ghost" style="margin-left:auto" onclick="toggleToc()" title="显示/隐藏左侧目录">☰ 目录</button>
     </div>
     <div id="read-novel" class="read-pane">
       <div class="toc-pane" id="novel-toc">
-        <div class="toc-head"><span>📑 目录</span><button class="toc-fold" onclick="toggleToc()" title="收起/展开目录">«</button></div>
+        <div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="toggleToc()" title="收起/展开目录">«</button></div>
         <div class="toc-body"><div class="empty">目录加载中…</div></div>
       </div>
       <div class="text-pane"><div class="empty">从左侧选择章节开始阅读</div></div>
@@ -466,7 +468,7 @@ function addMsg(html, cls){
 function attrEsc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function renderSources(sources){
   if (!sources || !sources.length) return '';
-  var html = '<div class="meta">引用片段：</div>';
+  var html = '';
   sources.forEach(function(s){
     var ex = (s.excerpt||'').trim();
     var exHint = ex ? attrEsc(ex.slice(0,24)) : '';
