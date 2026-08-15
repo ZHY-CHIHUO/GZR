@@ -345,27 +345,6 @@ def wiki_update(req: WikiEntryReq):
     return {"ok": True, "cat": req.cat or cat, "entry": entry}
 
 
-@app.post("/api/wiki/rebuild-quiz")
-def rebuild_quiz_from_wiki():
-    """从资料库重新生成题库与猜谜池（编辑资料后同步到游戏）。"""
-    import subprocess
-    import sys
-    script = config.BASE / "scripts" / "build_quiz.py"
-    if not script.is_file():
-        return JSONResponse({"ok": False, "error": "构建脚本不存在"}, status_code=404)
-    try:
-        r = subprocess.run(
-            [sys.executable, str(script)], cwd=str(config.BASE),
-            capture_output=True, text=True, timeout=180,
-        )
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": f"重建失败：{e}"}, status_code=500)
-    if r.returncode != 0:
-        return JSONResponse({"ok": False, "error": "重建失败：" + (r.stderr or r.stdout or "")[-200:]}, status_code=500)
-    _content_mtime["quiz"] = None
-    return {"ok": True, "message": (r.stdout or "").strip()[-160:]}
-
-
 class QuizReq(BaseModel):
     type: str = "mix"   # mix / gu / person / type
     n: int = 10
