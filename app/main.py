@@ -232,9 +232,19 @@ _content_mtime = {}
 def _load_content():
     """按文件修改时间热加载百科与题库（数据更新后无需重启服务）。"""
     global _wiki, _quiz, _content_mtime
+
+    def _resolve(key):
+        # 统一位置：data/ 为唯一权威文件；仅当不存在时回退到当前模型目录（历史兼容）
+        p = config.BASE / "data" / f"{key}.json"
+        if not p.is_file():
+            alt = config.DATA_DIR / f"{key}.json"
+            if alt.is_file():
+                return alt
+        return p
+
     targets = (
-        ("wiki", config.DATA_DIR / "wiki.json", "_wiki"),
-        ("quiz", config.DATA_DIR / "quiz.json", "_quiz"),
+        ("wiki", _resolve("wiki"), "_wiki"),
+        ("quiz", _resolve("quiz"), "_quiz"),
     )
     for key, path, slot in targets:
         try:
@@ -285,7 +295,7 @@ class WikiEntryReq(BaseModel):
 def wiki_update(req: WikiEntryReq):
     """编辑/删除百科条目，直接写回资料库 wiki.json（所有数据目录同步）。"""
     _load_content()
-    path = config.DATA_DIR / "wiki.json"
+    path = config.BASE / "data" / "wiki.json"
     if not path.is_file():
         return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
     try:
@@ -325,15 +335,10 @@ def wiki_update(req: WikiEntryReq):
             entry["section"] = req.section.strip()
         if req.desc is not None:
             entry["desc"] = req.desc.strip()
-    write_paths = [path, config.BASE / "data" / "wiki.json"]
-    m3 = config.BASE / "data_m3" / "wiki.json"
-    if m3.is_file():
-        write_paths.append(m3)
-    for wp in write_paths:
-        try:
-            wp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-        except Exception:
-            pass
+    try:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"写入资料库失败：{e}"}, status_code=500)
     _content_mtime["wiki"] = None  # 强制下次请求重新加载
     if req.delete:
         return {"ok": True, "deleted": 1}
@@ -357,13 +362,6 @@ def rebuild_quiz_from_wiki():
         return JSONResponse({"ok": False, "error": f"重建失败：{e}"}, status_code=500)
     if r.returncode != 0:
         return JSONResponse({"ok": False, "error": "重建失败：" + (r.stderr or r.stdout or "")[-200:]}, status_code=500)
-    src = config.DATA_DIR / "quiz.json"
-    dst = config.BASE / "data" / "quiz.json"
-    try:
-        if src.is_file():
-            dst.write_bytes(src.read_bytes())
-    except Exception:
-        pass
     _content_mtime["quiz"] = None
     return {"ok": True, "message": (r.stdout or "").strip()[-160:]}
 

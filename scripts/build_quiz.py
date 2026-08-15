@@ -10,13 +10,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.config import DATA_DIR  # noqa: E402
+from app.config import BASE, DATA_DIR  # noqa: E402
 
 TYPE_RE = re.compile(r"([\u4e00-\u9fa5]{1,4}类)蛊虫")
 
 
 def main():
-    wiki = json.load(open(os.path.join(str(DATA_DIR), "wiki.json"), encoding="utf-8"))
+    wiki = json.load(open(str(BASE / "data" / "wiki.json"), encoding="utf-8"))
     random.seed(20260815)
 
     quiz = []
@@ -238,7 +238,7 @@ def main():
     }
 
     out = {"quiz": quiz, "riddles": riddles}
-    with open(os.path.join(str(DATA_DIR), "quiz.json"), "w", encoding="utf-8") as f:
+    with open(str(BASE / "data" / "quiz.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
     print(f"quiz: {len(quiz)} 题  (蛊虫 {sum(1 for x in quiz if x['type']=='蛊虫')} / 人物 {sum(1 for x in quiz if x['type']=='人物')} / 类型 {sum(1 for x in quiz if x['type']=='蛊虫类型')})")
     print("riddles:", {k: len(v) for k, v in riddles.items()})

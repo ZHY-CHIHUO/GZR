@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.config import DATA_DIR  # noqa: E402
+from app.config import BASE, DATA_DIR  # noqa: E402
 
 CATEGORY_RULES = [
     # 资料合集的主框架：这些分类优先于泛化的“蛊虫/人物”词命中。
@@ -87,7 +87,7 @@ def main():
             entries.setdefault(cat, {})[name] = {"name": name, "desc": desc, "section": section, "sub": sub}
     out = {cat: sorted(v.values(), key=lambda e: len(e["desc"]), reverse=True) for cat, v in entries.items()}
     stats = {cat: len(v) for cat, v in out.items()}
-    with open(os.path.join(str(DATA_DIR), "wiki.json"), "w", encoding="utf-8") as f:
+    with open(str(BASE / "data" / "wiki.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
     print("stats:", stats)
     for cat in ("蛊虫", "人物", "势力", "仙蛊屋"):
