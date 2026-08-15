@@ -834,8 +834,7 @@ function renderWikiDetail(e, cat, index){
   var key = wikiEntryKey(e, cat);
   WIKI_CURRENT = {key: key, entry: e, cat: cat};
   setWikiActiveItem(key);
-  var paragraphs = wikiParagraphs(e.desc);
-  var lead = paragraphs.shift() || '暂无条目摘要。';
+  var paragraphs = String(e.desc || '').trim().split(/\n+/).filter(Boolean);
   var body = paragraphs.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
   var prev = index > 0 ? WIKI_VISIBLE[index - 1] : null;
   var next = index >= 0 && index < WIKI_VISIBLE.length - 1 ? WIKI_VISIBLE[index + 1] : null;
@@ -848,8 +847,7 @@ function renderWikiDetail(e, cat, index){
     '</header>' +
     '<div class="wiki-article-grid">' +
       '<div class="wiki-article-copy">' +
-        '<p class="wiki-lead">'+esc(lead)+'</p>' +
-        (body ? body : '') +
+        (body ? body : '<p>暂无条目摘要。</p>') +
         '<section class="wiki-section wiki-source"><h2>资料来源</h2><p>本条目整理自「'+esc(e.section || cat)+'」资料库。</p></section>' +
       '</div>' +
       '<aside class="wiki-infobox" aria-label="条目信息">' +
