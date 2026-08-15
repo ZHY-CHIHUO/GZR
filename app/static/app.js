@@ -914,12 +914,12 @@ function addCustomQuestion(){
   var list = customQuiz();
   if (kind === 'riddle'){
     var name = ($('cq-rname').value || '').trim();
-    var hints = [0,1,2].map(function(i){ return ($('cq-rh'+i).value || '').trim(); }).filter(Boolean);
+    var hints = ($('cq-rhints').value || '').split(/\n+/).map(function(s){ return s.trim(); }).filter(Boolean);
     if (!name){ toast('请填写谜底名称'); return; }
-    if (hints.length < 2){ toast('至少填写两条提示'); return; }
-    list.push({kind: 'riddle', type: $('cq-rtype').value, name: name, hints: hints});
+    if (hints.length < 2){ toast('至少填写两条提示（建议 5~10 条）'); return; }
+    list.push({kind: 'riddle', type: $('cq-rtype').value, name: name, hints: hints.slice(0, 10)});
     saveCustomQuiz(list);
-    $('cq-rname').value = ''; [0,1,2].forEach(function(i){ $('cq-rh'+i).value = ''; });
+    $('cq-rname').value = ''; $('cq-rhints').value = '';
     $('cq-count').textContent = list.length;
     renderCustomQuizList(); toast('已添加猜谜题，玩猜谜时会混入');
     return;
@@ -1087,14 +1087,14 @@ function renderRiddle(){
   var html = '<div class="riddle-hints">';
   for (var i=0; i<=RIDDLE_IDX; i++) html += '<div class="riddle-hint">提示'+(i+1)+'：'+esc(RIDDLE.hints[i])+'</div>';
   html += '</div>';
-  if (RIDDLE_IDX < 2) html += '<br><button class="btn btn-ghost" onclick="moreHint()">更多提示（-1分）</button>';
+  if (RIDDLE_IDX < RIDDLE.hints.length - 1) html += '<br><button class="btn btn-ghost" onclick="moreHint()">更多提示（-1分）</button>';
   html += '<div class="riddle-ask"><input id="riddle-input" placeholder="输入你的答案…" autocomplete="off"><button class="btn btn-primary" onclick="guessRiddle()">猜！</button></div>';
   html += '<div id="riddle-fb"></div>';
   $('riddle-body').innerHTML = html;
   var inp = $('riddle-input'); if (inp) { inp.focus(); inp.addEventListener('keydown', function(e){ if (e.key==='Enter') guessRiddle(); }); }
 }
 function moreHint(){
-  if (RIDDLE_IDX >= 2) return;
+  if (RIDDLE_IDX >= RIDDLE.hints.length - 1) return;
   RIDDLE_IDX++;
   var s = Math.max(0, riddleScore() - 1);
   localStorage.setItem('gzr.riddleScore', s);
@@ -1107,12 +1107,12 @@ function guessRiddle(){
   if (!g) return;
   var hit = (g === RIDDLE.name || RIDDLE.name.indexOf(g) >= 0 || g.indexOf(RIDDLE.name) >= 0);
   if (hit){
-    var pts = [3,2,1][RIDDLE_IDX] || 1;
+    var pts = Math.max(1, 8 - RIDDLE_IDX);
     localStorage.setItem('gzr.riddleScore', riddleScore() + pts);
     updateRiddleScore();
     recordRiddle(true, pts);
     fb.innerHTML = '猜对了！+'+pts+'分　答案：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
-  } else if (RIDDLE_IDX >= 2){
+  } else if (RIDDLE_IDX >= RIDDLE.hints.length - 1){
     recordRiddle(false, 0);
     fb.innerHTML = '没猜中，答案是：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
   } else {

@@ -182,3 +182,7 @@ input, select, textarea{ font-size:14.5px; }
 .cq-item-opts span.cq-right{ background:#F2F2EF; border-color:var(--accent); color:var(--accent); font-weight:700; }
 .cq-empty{ padding:12px 0; color:var(--muted); font-size:13.5px; }
 #cq-import{ font-family:Consolas,Monaco,monospace; font-size:12.5px; }
+/* ---- 游戏通用工具栏 ---- */
+.game-toolbar{ display:flex; align-items:center; gap:10px; justify-content:flex-end; padding:10px clamp(14px,2.3vw,30px) 0; }
+.game-toolbar-title{ margin-right:auto; color:var(--muted); font-size:12.5px; letter-spacing:1px; }
+.game-toolbar .btn{ min-height:34px; padding:6px 14px; font-size:13.5px; }

@@ -190,14 +190,37 @@ def main():
             dist = random.sample([n for n in names if n != e["name"]], 3)
             opts = [e["name"]] + dist
             random.shuffle(opts)
+            hints = [first]
+            clean = re.sub(r"\s+", " ", d).strip()
+            # 最多切 3 段线索，按句读收尾，保证提示数量
+            chunks = []
+            t = clean
+            while t and len(chunks) < 3:
+                head = t[:44]
+                cut = max(head.rfind(c) for c in "。！？；，、")
+                if cut > 14:
+                    head = head[:cut + 1]
+                    t = t[cut + 1:].lstrip("。！？；，、 ")
+                else:
+                    t = t[44:]
+                chunks.append(head.strip())
+            for ch in chunks:
+                hints.append("线索：" + (ch + "……" if len(ch) >= 40 else ch))
+            roles = re.findall(r"【([^】]{2,30})】", d)
+            rel = next((r for r in roles if not re.search(r"第[零一二三四五六七八九十百千]+节", r)), None)
+            if rel:
+                hints.append("相关角色：" + rel[:26])
+            secm = next((r for r in roles if re.search(r"第[零一二三四五六七八九十百千]+节", r)), None)
+            if secm:
+                hints.append("出处：" + secm[:24])
+            hints.append(f"它的名字共 {len(e['name'])} 个字，首字是「{e['name'][0]}」")
+            # 保证至少 5 条
+            while len(hints) < 5:
+                hints.append("提示：它的设定收录于《蛊真人》资料库。")
             pool.append({
                 "name": e["name"],
                 "options": opts,
-                "hints": [
-                    first,
-                    f"线索：{d[:40]}……",
-                    f"它的名字共 {len(e['name'])} 个字，首字是「{e['name'][0]}」",
-                ],
+                "hints": hints[:8],
             })
             if len(pool) >= limit:
                 break
