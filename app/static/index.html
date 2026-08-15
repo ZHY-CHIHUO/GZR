@@ -138,10 +138,27 @@
             <option value="person">人物题</option>
             <option value="type">蛊虫类型题</option>
           </select>
-          <button class="btn btn-primary" onclick="startQuiz()">开始答题（10题）</button>
+          <select id="quiz-n" title="题目数量（10 的整数倍）">
+            <option value="10" selected>10 题</option>
+            <option value="20">20 题</option>
+            <option value="30">30 题</option>
+            <option value="40">40 题</option>
+            <option value="50">50 题</option>
+            <option value="60">60 题</option>
+            <option value="70">70 题</option>
+            <option value="80">80 题</option>
+            <option value="90">90 题</option>
+            <option value="100">100 题</option>
+          </select>
+          <button class="btn btn-primary" onclick="startQuiz()">开始答题</button>
+          <span id="quiz-timer" class="game-timer" title="本组用时">00:00</span>
           <span id="quiz-score" class="game-score">累计 0/0</span>
         </div>
         <div id="quiz-body" class="game-body"><div class="empty">点击「开始答题」挑战你的蛊真人知识！</div></div>
+        <div class="quiz-history" id="quiz-history">
+          <div class="quiz-history-head"><span>历史记录</span><button class="tool-btn" onclick="clearQuizHistory()">清空</button></div>
+          <div id="quiz-history-list"></div>
+        </div>
       </div>
       <div id="game-riddle" class="game-pane" hidden>
         <div class="game-top">

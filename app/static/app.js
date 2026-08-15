@@ -137,18 +137,7 @@ var SUGGEST = ['白玉蛊是怎么炼成的','十大尊者都有谁','方源为�
 var CHARS = ['方源','白凝冰','古月方正','凤九歌','武庸','龙公','星宿仙尊','巨阳仙尊','幽魂魔尊','狂蛮魔尊','盗天魔尊','乐土仙尊'];
 function renderSuggest(){
   var box = $('suggest');
-  SUGGEST.forEach(function(s){
-    var c = document.createElement('span');
-    c.className='chip'; c.textContent=''+s;
-    c.onclick = function(){ $('q').value=s; ask(); };
-    box.appendChild(c);
-  });
-  CHARS.forEach(function(name){
-    var c = document.createElement('span');
-    c.className='chip'; c.textContent=name;
-    c.onclick = function(){ $('q').value='介绍一下'+name+'：他/她是谁，有什么经历和特点'; ask(); };
-    box.appendChild(c);
-  });
+  if (box) box.innerHTML = '';
 }
 function addMsg(html, cls, cid){
   var d = document.createElement('div'); d.className='msg '+cls; d.innerHTML = html;
@@ -851,29 +840,40 @@ function askAbout(name){
 $('wiki-search').addEventListener('input', function(){ renderWikiList(WIKI_CAT, true); });
 
 /* ---------- 游戏：选择题 ---------- */
-var QUIZ_QS = [], QUIZ_IDX = 0, QUIZ_RIGHT = 0;
+var QUIZ_QS = [], QUIZ_IDX = 0, QUIZ_RIGHT = 0, QUIZ_N = 10;
+var QUIZ_T0 = 0, QUIZ_TIMER = null;
 function quizScore(){ return {t: +(localStorage.getItem('gzr.quizTotal')||0), c: +(localStorage.getItem('gzr.quizCorrect')||0)}; }
 function updateQuizScore(){
   var s = quizScore();
   $('quiz-score').textContent = '累计 ' + s.c + '/' + s.t;
 }
+function quizHistory(){ try { return JSON.parse(localStorage.getItem('gzr.quizHistory') || '[]'); } catch(e){ return []; } }
+function fmtTime(sec){ sec = Math.max(0, Math.floor(sec)); var m = Math.floor(sec/60), s = sec%60; return (m<10?'0':'')+m+':'+(s<10?'0':'')+s; }
+function startQuizTimer(){
+  stopQuizTimer();
+  QUIZ_T0 = Date.now();
+  $('quiz-timer').textContent = '00:00';
+  QUIZ_TIMER = setInterval(function(){
+    $('quiz-timer').textContent = fmtTime((Date.now() - QUIZ_T0) / 1000);
+  }, 250);
+}
+function stopQuizTimer(){ if (QUIZ_TIMER){ clearInterval(QUIZ_TIMER); QUIZ_TIMER = null; } }
 async function startQuiz(){
   var type = $('quiz-type').value;
+  QUIZ_N = parseInt($('quiz-n').value, 10) || 10;
   $('quiz-body').innerHTML = '<div class="empty">出题中…</div>';
   try {
-    var j = await (await fetch('/api/quiz', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type: type, n: 10})})).json();
+    var j = await (await fetch('/api/quiz', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type: type, n: QUIZ_N})})).json();
+    if (!j.questions || !j.questions.length) throw new Error('题库为空');
     QUIZ_QS = j.questions; QUIZ_IDX = 0; QUIZ_RIGHT = 0;
+    startQuizTimer();
     renderQuizQ();
   } catch(e){ $('quiz-body').innerHTML = '<div class="empty">出题失败：'+esc(e.message)+'</div>'; }
 }
 function renderQuizQ(){
-  if (QUIZ_IDX >= QUIZ_QS.length){
-    var s = quizScore(); localStorage.setItem('gzr.quizTotal', s.t); localStorage.setItem('gzr.quizCorrect', s.c);
-    $('quiz-body').innerHTML = '<div class="empty">本组完成：答对 <b>'+QUIZ_RIGHT+'/'+QUIZ_QS.length+'</b><br><br><button class="btn btn-primary" onclick="startQuiz()">再来一组</button></div>';
-    updateQuizScore(); return;
-  }
+  if (QUIZ_IDX >= QUIZ_QS.length){ finishQuiz(); return; }
   var q = QUIZ_QS[QUIZ_IDX];
-  var html = '<div class="quiz-q">第 '+(QUIZ_IDX+1)+' 题 · '+esc(q.q)+'</div>';
+  var html = '<div class="quiz-q">第 '+(QUIZ_IDX+1)+' / '+QUIZ_QS.length+' 题 · '+esc(q.q)+'</div>';
   q.options.forEach(function(opt, i){
     html += '<button class="quiz-opt" onclick="answerQuiz('+i+')">' + esc(opt) + '</button>';
   });
@@ -894,9 +894,39 @@ function answerQuiz(i){
     '<br><br><button class="btn btn-primary" onclick="renderQuizQ()">'+(QUIZ_IDX < QUIZ_QS.length-1 ? '下一题 →' : '查看成绩')+'</button>';
   document.querySelectorAll('.quiz-opt').forEach(function(b){
     b.disabled = true;
-    if (b.textContent === q.options[q.answer]) b.style.borderColor = '#2e7d32'; b.style.borderWidth='2px';
+    if (b.textContent === q.options[q.answer]) b.style.borderColor = '#2e7d32';
+    b.style.borderWidth='2px';
   });
   QUIZ_IDX++;
+}
+function finishQuiz(){
+  stopQuizTimer();
+  var sec = Math.round((Date.now() - QUIZ_T0) / 1000);
+  var h = quizHistory();
+  h.unshift({
+    d: new Date().toLocaleString('zh-CN', {hour12:false}),
+    type: $('quiz-type').value,
+    n: QUIZ_QS.length,
+    right: QUIZ_RIGHT,
+    sec: sec
+  });
+  if (h.length > 30) h.length = 30;
+  try { localStorage.setItem('gzr.quizHistory', JSON.stringify(h)); } catch(e){}
+  renderQuizHistory();
+  $('quiz-body').innerHTML = '<div class="empty">本组完成：答对 <b>'+QUIZ_RIGHT+'/'+QUIZ_QS.length+'</b>　用时 '+fmtTime(sec)+'<br><br><button class="btn btn-primary" onclick="startQuiz()">再来一组</button></div>';
+}
+function renderQuizHistory(){
+  var box = $('quiz-history-list'); if (!box) return;
+  var h = quizHistory();
+  if (!h.length){ box.innerHTML = '<div class="quiz-history-empty">暂无记录，完成一组题目后自动保存。</div>'; return; }
+  var labels = {mix:'混合', gu:'蛊虫', person:'人物', type:'蛊虫类型'};
+  box.innerHTML = h.map(function(r){
+    return '<div class="quiz-history-item"><span>'+esc(r.d)+'</span><span>'+esc(labels[r.type]||r.type)+' · '+r.n+' 题</span><b>'+r.right+' / '+r.n+'</b><span>'+fmtTime(r.sec)+'</span></div>';
+  }).join('');
+}
+function clearQuizHistory(){
+  localStorage.removeItem('gzr.quizHistory');
+  renderQuizHistory();
 }
 
 /* ---------- 游戏：猜谜 ---------- */

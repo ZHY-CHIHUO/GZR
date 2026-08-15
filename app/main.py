@@ -226,22 +226,38 @@ def list_models():
 
 _wiki = None
 _quiz = None
+_content_mtime = {}
 
 
 def _load_content():
-    global _wiki, _quiz
-    if _wiki is None:
-        wp = config.DATA_DIR / "wiki.json"
-        if wp.is_file():
-            _wiki = json.loads(wp.read_text(encoding="utf-8"))
+    """按文件修改时间热加载百科与题库（数据更新后无需重启服务）。"""
+    global _wiki, _quiz, _content_mtime
+    targets = (
+        ("wiki", config.DATA_DIR / "wiki.json", "_wiki"),
+        ("quiz", config.DATA_DIR / "quiz.json", "_quiz"),
+    )
+    for key, path, slot in targets:
+        try:
+            mt = path.stat().st_mtime if path.is_file() else None
+        except OSError:
+            mt = None
+        if _content_mtime.get(key) == mt:
+            continue
+        _content_mtime[key] = mt
+        if path.is_file():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                data = {} if key == "wiki" else {"quiz": [], "riddles": {}}
+            if key == "wiki":
+                _wiki = data
+            else:
+                _quiz = data
         else:
-            _wiki = {}
-    if _quiz is None:
-        qp = config.DATA_DIR / "quiz.json"
-        if qp.is_file():
-            _quiz = json.loads(qp.read_text(encoding="utf-8"))
-        else:
-            _quiz = {"quiz": [], "riddles": {}}
+            if key == "wiki":
+                _wiki = {}
+            else:
+                _quiz = {"quiz": [], "riddles": {}}
 
 
 @app.get("/api/wiki")
