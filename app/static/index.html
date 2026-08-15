@@ -6,6 +6,7 @@
 <title>蛊箓 · 蛊真人维基百科</title>
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/refine.css">
+<link rel="stylesheet" href="/static/ink.css">
 <script src="/static/pdfjs/pdf.min.js"></script>
 </head>
 <body>
@@ -83,12 +84,22 @@
   <!-- 百科 -->
   <section id="tab-wiki" class="panel" hidden>
     <div class="wiki-wrap">
-      <div class="wiki-side">
-        <input id="wiki-search" placeholder="🔍 搜索条目…" autocomplete="off">
+      <aside class="wiki-side" aria-label="百科分类">
+        <div class="wiki-kicker">蛊箓百科</div>
+        <label class="wiki-search-label" for="wiki-search">搜索百科</label>
+        <input id="wiki-search" type="search" placeholder="搜索条目" autocomplete="off">
         <div id="wiki-cats"></div>
-      </div>
-      <div class="wiki-list" id="wiki-list"><div class="empty">选择左侧分类</div></div>
-      <div class="wiki-detail" id="wiki-detail"><div class="empty">点击条目查看详情</div></div>
+      </aside>
+      <article class="wiki-detail" id="wiki-detail" aria-live="polite">
+        <div class="empty">选择一个条目开始阅读</div>
+      </article>
+      <aside class="wiki-index" aria-label="当前分类条目">
+        <div class="wiki-index-head">
+          <div class="wiki-index-title">条目索引</div>
+          <div class="wiki-result-count" id="wiki-result-count"></div>
+        </div>
+        <div class="wiki-list" id="wiki-list"><div class="empty">选择分类查看条目</div></div>
+      </aside>
     </div>
   </section>
 
@@ -128,31 +139,35 @@
   <!-- 设置 -->
   <section id="tab-settings" class="panel" hidden>
     <div class="settings-wrap">
-      <div class="card">
-        <h3><span class="step-no">1</span> 获取 DeepSeek API Key（教程）</h3>
-        <p>问答功能由 DeepSeek 大模型驱动，需要你自己的 API Key（普通手机号即可注册，按量计费，每次问答约 1~2 分钱）。</p>
-        <br><button class="btn btn-ghost" onclick="openTutorial()">📖 查看教程：如何获取 API Key</button>
+      <div class="card connection-card">
+        <h3><span class="step-no">1</span> AI 服务连接</h3>
+        <p>填写任意 OpenAI 兼容服务的连接参数。可使用 OpenAI、DeepSeek、硅基流动、火山方舟或本地 Ollama 等服务。</p>
+        <div class="settings-fields">
+          <label for="base-url">Base URL</label>
+          <input type="text" id="base-url" placeholder="https://api.deepseek.com" autocomplete="url" spellcheck="false">
+          <div class="field-help">服务商提供的 OpenAI 兼容接口地址，例如 <code>https://api.openai.com/v1</code>。</div>
+
+          <label for="api-key">API Key</label>
+          <input type="password" id="api-key" placeholder="留空则沿用已保存的 Key" autocomplete="new-password">
+          <div class="field-help" id="key-status">正在检查 Key 状态…</div>
+
+          <label for="model">模型名</label>
+          <input type="text" id="model" placeholder="deepseek-chat" autocomplete="off" spellcheck="false">
+          <div class="field-help">填写服务商实际开放的模型 ID，名称需完全一致。</div>
+        </div>
+        <div class="settings-actions">
+          <button class="btn btn-primary" id="connection-save" onclick="saveAndTest()">测试并保存</button>
+          <button class="btn btn-ghost" onclick="openTutorial()">配置示例</button>
+          <button class="btn btn-ghost" onclick="clearKey()">清除 Key</button>
+        </div>
+        <div class="result" id="key-result" aria-live="polite"></div>
       </div>
       <div class="card">
-        <h3><span class="step-no">2</span> 填入你的 API Key</h3>
-        <input type="password" id="api-key" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off">
-        <div class="result" id="key-result"></div>
-        <br>
-        <button class="btn btn-primary" onclick="saveAndTest()">保存并测试连接</button>
-        <button class="btn btn-ghost" onclick="clearKey()">清除 Key</button>
-      </div>
-      <div class="card">
-        <h3><span class="step-no">3</span> 检索模型（影响准确率与速度）</h3>
+        <h3><span class="step-no">2</span> 检索模型（影响准确率与速度）</h3>
         <p>不同向量模型的准确率与查询速度不同（实测数据见选项说明）。切换后自动重建检索器，无需重启。</p>
         <select id="embed-model" class="field-wide"></select>
         <div class="result" id="model-result"></div>
         <br><button class="btn btn-primary" onclick="saveEmbedModel()">切换检索模型</button>
-      </div>
-      <div class="card">
-        <h3><span class="step-no">4</span> 问答模型设置（可选）</h3>
-        <p>默认 <code>deepseek-chat</code>（性价比最高）；追求更强推理可换 <code>deepseek-reasoner</code>，但更贵更慢。</p>
-        <input type="text" id="model" placeholder="deepseek-chat" autocomplete="off">
-        <br><button class="btn btn-ghost btn-spaced" onclick="saveModel()">保存模型</button>
       </div>
     </div>
   </section>

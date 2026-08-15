@@ -1,7 +1,7 @@
 # 📜 蛊箓 · 蛊真人维基百科
 
 基于《蛊真人》全文（2334 章）+ 书友设定合集（约 40 万字）的**本地知识库 + 百科 + 游戏**网页应用。
-**自带预建向量库，clone 即用；问答使用你自己的 DeepSeek API Key（不配 Key 也能用百科/阅读/游戏/检索测试）。**
+**自带预建向量库，clone 即用；问答支持任意 OpenAI 兼容服务（不配 Key 也能用百科/阅读/游戏/检索测试）。**
 
 ## 特性
 
@@ -9,7 +9,7 @@
 - 📚 **双知识库**：正文库（2334 章）+ 设定库（蛊虫百科/人物图鉴/势力/仙蛊屋等）
 - 📖 **内置阅读器**：原版小说（章节目录+全文）、插图版 PDF、人祖传、资料合集 docx 在线看
 - 🔗 **出处可定位**：答案的来源卡片可「阅读原文」（全文+高亮命中位置）、「打开本地文件」（直接打开对应 txt）
-- 🔌 **新手引导**：未配 Key 时引导去设置页，内置 DeepSeek API Key 获取教程，网页里直接粘贴 Key 保存并测试连接
+- 🔌 **连接配置**：设置页可填写任意 OpenAI 兼容服务的 Base URL、API Key 和模型名，并在保存前测试连接
 - 🧠 **多检索模型可选**：标准（bge-small-zh-v1.5，快）/ BGE-M3（更准）/ jina-v2-base-zh（中文增强），网页一键切换，附实测准确率与速度
 - 🎯 **检索范围过滤**：全部库 / 仅正文 / 仅设定；支持多轮追问上下文
 - 📝 **章节摘要增强**（可选）：剧情类问题先用章节摘要定位再回原文，检索命中大幅提升（试点：第1卷前10章摘要已生效；生成全量摘要见 scripts/generate_summaries.py）
@@ -33,8 +33,8 @@ uvicorn app.main:app --port 8000
 #    http://localhost:8000
 
 # 4. 连接 AI（两种方式任选）
-#    ① 网页「设置」页 → 按内置教程获取 DeepSeek API Key → 粘贴保存并测试（推荐，免重启）
-#    ② 手动：copy .env.example .env → 编辑填入 DEEPSEEK_API_KEY=sk-xxx → 重启服务
+#    ① 网页「设置」页 → 填写 Base URL、API Key、模型名 → 测试并保存（推荐，免重启）
+#    ② 手动：copy .env.example .env → 编辑 AI_API_KEY / AI_BASE_URL / AI_MODEL → 重启服务
 ```
 
 > 不填 Key 也能启动：页面显示“检索测试模式”，可看到每个问题检索到了哪些章节。
@@ -66,13 +66,15 @@ gu-zhen-ren-rag/
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | 空 | 你的 DeepSeek key，必填才启用 AI 回答 |
-| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | 兼容 OpenAI 协议的端点 |
-| `DEEPSEEK_MODEL` | `deepseek-chat` | 问答模型 |
+| `AI_API_KEY` | 空 | OpenAI 兼容服务的 Key，留空时进入检索测试模式 |
+| `AI_BASE_URL` | `https://api.deepseek.com` | OpenAI 兼容接口地址 |
+| `AI_MODEL` | `deepseek-chat` | 服务商开放的模型 ID |
 | `RAG_TOP_K` | `5` | 检索返回片段数（可调，见评估） |
 | `RAG_EXCERPT_CHARS` | `600` | 每个片段送入模型的字数 |
 | `RAG_DATA_DIR` | `data` | 向量库目录 |
 | `RAG_MODEL_CACHE_DIR` | `model_cache` | 本地 embedding 模型缓存 |
+
+旧版 `DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL` 仍可读取；同一项同时存在时优先使用 `AI_*`。
 
 ## 自己重建向量库（可选）
 

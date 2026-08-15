@@ -1,5 +1,8 @@
 var HEALTH = null;
 var LIB = null;
+var LIB_LOADING = null;
+var PENDING_CHAPTER = null;
+var CHAPTER_REQUEST_ID = 0;
 var CUR_VOL = null;
 var CUR_CH = 0;
 var HISTORY = [];   // 多轮对话上下文
@@ -43,20 +46,12 @@ function mdRender(text){
 }
 document.querySelectorAll('.tab').forEach(function(btn){
   btn.addEventListener('click', function(){
-    document.querySelectorAll('.tab').forEach(function(b){ b.classList.remove('active'); });
-    btn.classList.add('active');
-    ['chat','read','wiki','game','settings'].forEach(function(t){ $('tab-'+t).hidden = (t !== btn.dataset.tab); });
-    if (btn.dataset.tab==='read' && !LIB) loadLibrary();
-    if (btn.dataset.tab==='wiki') loadWiki();
+    switchTab(btn.dataset.tab);
   });
 });
 document.querySelectorAll('.rtab[data-rt]').forEach(function(btn){
   btn.addEventListener('click', function(){
-    document.querySelectorAll('.rtab[data-rt]').forEach(function(b){ b.classList.remove('active'); });
-    btn.classList.add('active');
-    ['novel','pdf','rz','lore'].forEach(function(t){ $('read-'+t).hidden = (t !== btn.dataset.rt); });
-    if ((btn.dataset.rt==='pdf'||btn.dataset.rt==='rz') && !$('read-pdf').dataset.loaded) loadPdfs();
-    if (btn.dataset.rt==='lore') loadLore();
+    switchReadTab(btn.dataset.rt);
   });
 });
 
@@ -111,13 +106,16 @@ $('read-novel').querySelector('.toc-body').addEventListener('click', function(ev
   if (el.classList && el.classList.contains('toc-link') && el.getAttribute('data-vol')){
     ev.preventDefault();
     ev.stopPropagation();
-    showChapter(el.getAttribute('data-vol'), parseInt(el.getAttribute('data-ch'), 10));
+    var vol = el.getAttribute('data-vol');
+    var ch = parseInt(el.getAttribute('data-ch'), 10);
+    PENDING_CHAPTER = {vol: vol, ch: ch};
+    showChapter(vol, ch);
   }
 });
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===name); });
   ['chat','read','wiki','game','settings'].forEach(function(t){ $('tab-'+t).hidden = (t !== name); });
-  if (name==='read' && !LIB) loadLibrary();
+  if (name==='read') loadLibrary().catch(function(){});
   if (name==='wiki') loadWiki();
 }
 async function refreshHealth(){
@@ -125,8 +123,12 @@ async function refreshHealth(){
   catch(e){ HEALTH = null; }
   updateStatus();
   if (HEALTH && HEALTH.ok){
-    $('api-key').value = HEALTH.has_key ? 'sk-已配置（留空则不改动）' : '';
+    $('api-key').value = '';
+    $('base-url').value = HEALTH.base_url || 'https://api.deepseek.com';
     $('model').value = HEALTH.model || 'deepseek-chat';
+    $('key-status').textContent = HEALTH.has_key
+      ? '已保存 API Key。留空会沿用现有 Key。'
+      : '尚未保存 API Key。';
   }
 }
 
@@ -265,12 +267,24 @@ $('chat').addEventListener('click', function(ev){
 function switchReadTab(rt){
   document.querySelectorAll('.rtab[data-rt]').forEach(function(b){ b.classList.toggle('active', b.dataset.rt === rt); });
   ['novel','pdf','rz','lore'].forEach(function(t){ $('read-'+t).hidden = (t !== rt); });
+  if (rt === 'pdf' || rt === 'rz'){
+    loadLibrary().then(function(){
+      var pane = $('read-'+rt);
+      var chapters = rt === 'pdf' ? PDF_CHS : RZ_CHS;
+      if (chapters.length && !pane.dataset.chapterLoaded){
+        pane.dataset.chapterLoaded = '1';
+        renderChapter(0, rt, pane);
+      }
+    }).catch(function(){});
+  }
+  if (rt === 'lore') loadLore();
 }
 function gotoNovelChapter(vol, ch){
+  var libraryReady = !!LIB;
+  PENDING_CHAPTER = {vol: vol, ch: Number(ch)};
   switchTab('read');
   switchReadTab('novel');
-  var go = function(){ showChapter(vol, ch); };
-  if (!LIB){ loadLibrary().then(go); } else { go(); }
+  if (libraryReady) showChapter(vol, Number(ch));
 }
 function gotoLoreSection(section){
   switchTab('read');
@@ -330,26 +344,32 @@ async function locateFile(vol, ch){
 }
 
 /* ---------- 阅读库 ---------- */
-async function loadLibrary(){
-  try {
-    var j = await (await fetch('/api/library')).json();
-    LIB = j;
+function loadLibrary(){
+  if (LIB) return Promise.resolve(LIB);
+  if (LIB_LOADING) return LIB_LOADING;
+  var hadExplicitTarget = !!PENDING_CHAPTER;
+  LIB_LOADING = fetch('/api/library').then(function(response){
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    return response.json();
+  }).then(function(j){
+    var volumes = Array.isArray(j.volumes) ? j.volumes : [];
+    LIB = Object.assign({}, j, {volumes: volumes, pdfs: Array.isArray(j.pdfs) ? j.pdfs : []});
     var toc = $('read-novel').querySelector('.toc-body');
     toc.innerHTML = '';
-    j.volumes.forEach(function(v){
+    volumes.forEach(function(v){
+      var chapters = Array.isArray(v.chapters) ? v.chapters : [];
       var det = document.createElement('details');
       det.className = 'toc-node lv1';
       var sum = document.createElement('summary');
       var s = document.createElement('span');
       s.className = 'toc-link';
-      s.textContent = v.name + '（' + v.chapters.length + ' 章）';
+      s.textContent = v.name + '（' + chapters.length + ' 章）';
       sum.appendChild(s);
       det.appendChild(sum);
       var list = document.createElement('div');
       list.className = 'toc-children';
-      // 每 20 章一个分组
-      for (var gi = 0; gi < v.chapters.length; gi += 20){
-        var chunk = v.chapters.slice(gi, gi + 20);
+      for (var gi = 0; gi < chapters.length; gi += 20){
+        var chunk = chapters.slice(gi, gi + 20);
         var grp = document.createElement('details');
         grp.className = 'toc-node lv2';
         var gsum = document.createElement('summary');
@@ -380,13 +400,34 @@ async function loadLibrary(){
       det.appendChild(list);
       toc.appendChild(det);
     });
-    renderPdfLists(j.pdfs);
-  } catch(e){ toast('阅读库加载失败：'+e.message); }
+    if (!volumes.length) toc.innerHTML = '<div class="empty">未找到小说章节</div>';
+    renderPdfLists(LIB.pdfs);
+
+    var target = PENDING_CHAPTER;
+    if (target) showChapter(target.vol, target.ch);
+    else if (!hadExplicitTarget && !CUR_VOL){
+      var firstVolume = volumes.find(function(v){ return Array.isArray(v.chapters) && v.chapters.length; });
+      if (firstVolume) showChapter(firstVolume.name, firstVolume.chapters[0].n);
+    }
+    return LIB;
+  }).catch(function(e){
+    LIB = null;
+    toast('阅读库加载失败：'+e.message);
+    throw e;
+  }).finally(function(){
+    LIB_LOADING = null;
+  });
+  return LIB_LOADING;
 }
 async function showChapter(vol, ch){
-  CUR_VOL = vol; CUR_CH = ch;
+  var requestId = ++CHAPTER_REQUEST_ID;
   try {
-    var j = await (await fetch('/api/chapter?vol='+encodeURIComponent(vol)+'&chapter='+ch)).json();
+    var response = await fetch('/api/chapter?vol='+encodeURIComponent(vol)+'&chapter='+ch);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    var j = await response.json();
+    if (requestId !== CHAPTER_REQUEST_ID) return;
+    CUR_VOL = vol; CUR_CH = Number(ch);
+    if (PENDING_CHAPTER && PENDING_CHAPTER.vol === vol && PENDING_CHAPTER.ch === Number(ch)) PENDING_CHAPTER = null;
     var pane = $('read-novel').querySelector('.text-pane');
     var paras = (j.text||'').split('\n').filter(function(x){ return x.trim(); });
     var title = (ch ? '第'+ch+'章 · ' : '序 · ') + stripSec(j.title);
@@ -397,21 +438,16 @@ async function showChapter(vol, ch){
     $('ch-prev').onclick = function(){ stepChapter(-1); };
     $('ch-next').onclick = function(){ stepChapter(1); };
     // 目录高亮当前章
-    document.querySelectorAll('#read-novel .toc-leaf .toc-link').forEach(function(it){ it.classList.remove('cur'); });
-    var list = $('read-novel').querySelectorAll('.toc-node');
-    for (var i=0;i<list.length;i++){
-      if (list[i].textContent.indexOf(vol)===0){
-        list[i].open = true;
-        var items = list[i].querySelectorAll('.toc-leaf .toc-link');
-        var target = items[ch-1];
-        if (target){
-          target.classList.add('cur');
-          var grp = target.closest('.toc-node');
-          if (grp) grp.open = true;  // 展开当前章所在分组
-        }
-        break;
+    document.querySelectorAll('#read-novel .toc-leaf .toc-link').forEach(function(link){
+      link.classList.remove('cur');
+      if (link.getAttribute('data-vol') === vol && Number(link.getAttribute('data-ch')) === Number(ch)){
+        link.classList.add('cur');
+        var group = link.closest('.toc-node');
+        if (group) group.open = true;
+        var volume = group ? group.parentElement.closest('.toc-node.lv1') : null;
+        if (volume) volume.open = true;
       }
-    }
+    });
   } catch(e){ toast('章节加载失败：'+e.message); }
 }
 function stepChapter(delta){
@@ -521,6 +557,7 @@ function nextChapter(){
   if (c.idx < chs.length - 1) renderChapter(c.idx + 1, c.key, c.pane);
 }
 function renderPdfLists(pdfs){
+  pdfs = Array.isArray(pdfs) ? pdfs : [];
   PDF_CHS = [];
   var combined = pdfs.find(function(p){ return p.name.indexOf('1.1') >= 0; }) ||
                  pdfs.find(function(p){ return p.group === '插图版'; });
@@ -542,7 +579,8 @@ function renderPdfLists(pdfs){
   } else {
     rz.innerHTML = '<div class="empty">未找到人祖传 PDF</div>';
   }
-  pane.dataset.loaded = '1';
+  delete pane.dataset.chapterLoaded;
+  delete rz.dataset.chapterLoaded;
   bindPdfTocClick('pdf-toc-body', 'read-pdf', 'pdf');
   bindPdfTocClick('rz-toc-body', 'read-rz', 'rz');
 }
@@ -567,20 +605,30 @@ function toggleRzToc(){ var t=$('rz-toc-pane'); t.classList.toggle('collapsed');
 function openTutorial(){ $('tutorial-modal').classList.add('show'); }
 async function saveAndTest(){
   var key = $('api-key').value.trim();
+  var baseUrl = $('base-url').value.trim();
+  var model = $('model').value.trim();
   var result = $('key-result');
-  if (!key || key.indexOf('sk-已配置')===0){ toast('请先粘贴你的 API Key'); return; }
+  if (!baseUrl){ toast('请填写 Base URL'); return; }
+  if (!model){ toast('请填写模型名'); return; }
+  var settings = {base_url: baseUrl, model: model};
+  if (key && key.indexOf('sk-已配置')!==0) settings.api_key = key;
   result.className='result'; result.textContent='正在测试连接…';
   try {
-    var t = await (await fetch('/api/settings/test', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key})})).json();
-    if (t.ok){
-      await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({api_key: key})});
-      result.className='result ok';
-      result.textContent = '✅ 连接成功！可用模型：' + (t.models||[]).join('、');
-      refreshHealth();
-    } else {
-      result.className='result err';
-      result.textContent = '❌ 连接失败：' + (t.error||t.message||'未知错误') + '（请检查 Key 是否完整、是否正确复制）';
-    }
+    var testResponse = await fetch('/api/settings/test', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(settings)
+    });
+    var t = await testResponse.json();
+    if (!testResponse.ok || !t.ok) throw new Error(t.error||t.message||('HTTP '+testResponse.status));
+
+    var saveResponse = await fetch('/api/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(settings)
+    });
+    var saved = await saveResponse.json();
+    if (!saveResponse.ok || !saved.ok) throw new Error(saved.error||('HTTP '+saveResponse.status));
+
+    result.className='result ok';
+    result.textContent = '✅ 连接成功并已保存：' + (t.models||[model]).join('、');
+    await refreshHealth();
   } catch(e){ result.className='result err'; result.textContent='❌ 请求出错：'+e.message; }
 }
 async function clearKey(){
@@ -629,15 +677,20 @@ async function saveEmbedModel(){
 
 /* ---------- 百科 ---------- */
 var WIKI = null, WIKI_CAT = '人物', WIKI_SUB = '', WIKI_SUBS = {};
+var WIKI_CURRENT = null, WIKI_VISIBLE = [];
 async function loadWiki(){
   if (WIKI) return;
   try {
-    WIKI = await (await fetch('/api/wiki')).json();
+    var response = await fetch('/api/wiki');
+    if (!response.ok) throw new Error('百科数据加载失败');
+    WIKI = await response.json();
     // 统计蛊虫子分类分布
     WIKI_SUBS = {};
     (WIKI.categories['蛊虫'] || []).forEach(function(e){ WIKI_SUBS[e.sub || '其他'] = (WIKI_SUBS[e.sub || '其他'] || 0) + 1; });
     renderWikiCats();
-  } catch(e){ /* 忽略 */ }
+  } catch(e){
+    $('wiki-detail').innerHTML = '<div class="empty">百科数据暂时无法加载</div>';
+  }
 }
 function renderWikiCats(){
   var box = $('wiki-cats'); box.innerHTML = '';
@@ -649,7 +702,7 @@ function renderWikiCats(){
     b.textContent = c + '（' + items.length + '）';
     b.onclick = function(){
       document.querySelectorAll('.wiki-cat').forEach(function(x){ x.classList.remove('active'); });
-      b.classList.add('active'); WIKI_CAT = c; WIKI_SUB = ''; renderWikiSubs(); renderWikiList(c);
+      b.classList.add('active'); WIKI_CAT = c; WIKI_SUB = ''; renderWikiSubs(); renderWikiList(c, true);
     };
     box.appendChild(b);
     // 蛊虫子分类（凡蛊转数 / 仙蛊）
@@ -660,7 +713,7 @@ function renderWikiCats(){
     }
   });
   renderWikiSubs();
-  renderWikiList(WIKI_CAT);
+  renderWikiList(WIKI_CAT, true);
 }
 function renderWikiSubs(){
   var sb = document.getElementById('wiki-subs');
@@ -674,60 +727,134 @@ function renderWikiSubs(){
     s.textContent = label;
     s.onclick = function(){
       document.querySelectorAll('.wiki-sub').forEach(function(x){ x.classList.remove('active'); });
-      s.classList.add('active'); WIKI_SUB = val; renderWikiList(WIKI_CAT);
+      s.classList.add('active'); WIKI_SUB = val; renderWikiList(WIKI_CAT, true);
     };
     sb.appendChild(s);
   };
   add('全部', '');
   order.forEach(function(o){ if (WIKI_SUBS[o]) add(o + '（' + WIKI_SUBS[o] + '）', o); });
 }
-function renderWikiList(cat){
+function wikiEntryKey(e, cat){
+  return (cat || e.section || '') + '\u0000' + (e.name || '');
+}
+function wikiExcerpt(text, length){
+  var clean = String(text || '').replace(/\s+/g, ' ').trim();
+  return clean.length > length ? clean.slice(0, length) + '…' : clean;
+}
+function renderWikiList(cat, selectFirst){
   var q = ($('wiki-search').value || '').trim();
   var box = $('wiki-list'); box.innerHTML = '';
+  var visible = [];
   if (q){
-    // 全局搜索：所有分类的名称/描述
     var found = [];
-    Object.keys(WIKI.categories).forEach(function c2(c){
+    Object.keys(WIKI.categories).forEach(function(c){
       (WIKI.categories[c] || []).forEach(function(e){
-        if (e.name.indexOf(q) >= 0 || (e.desc || '').indexOf(q) >= 0) found.push({e: e, c: c});
+        if (e.name.indexOf(q) >= 0 || (e.desc || '').indexOf(q) >= 0) found.push({entry: e, cat: c});
       });
     });
-    found.sort(function(a, b){ return (a.e.name === q ? -1 : 0) - (b.e.name === q ? -1 : 0); });
-    found.slice(0, 300).forEach(function(f){
-      var d = document.createElement('div');
-      d.className = 'wiki-item';
-      d.innerHTML = '<div class="wiki-item-name">'+esc(f.e.name)+' <span class="wiki-badge">'+esc(f.c)+'</span></div><div class="wiki-item-desc">'+esc((f.e.desc||'').slice(0,50))+'</div>';
-      d.onclick = function(){ renderWikiDetail(f.e); };
-      box.appendChild(d);
-    });
-    box.insertAdjacentHTML('afterbegin', '<div class="empty" style="padding:6px">🔍 全局搜到 ' + found.length + ' 条（名称/描述）</div>');
-    if (!found.length) box.innerHTML = '<div class="empty">没有匹配条目</div>';
-    return;
+    found.sort(function(a, b){ return (a.entry.name === q ? -1 : 0) - (b.entry.name === q ? -1 : 0); });
+    visible = found.slice(0, 300);
+  } else {
+    visible = (WIKI.categories[cat] || [])
+      .filter(function(e){ return !WIKI_SUB || (e.sub || '其他') === WIKI_SUB; })
+      .slice(0, 800)
+      .map(function(e){ return {entry: e, cat: cat}; });
   }
-  var items = (WIKI.categories[cat] || []).filter(function(e){ return !WIKI_SUB || (e.sub || '其他') === WIKI_SUB; });
-  items.slice(0, 800).forEach(function(e){
-    var d = document.createElement('div');
+  WIKI_VISIBLE = visible;
+  $('wiki-result-count').textContent = q
+    ? '搜索到 ' + visible.length + ' 条' + (visible.length === 300 ? '（仅显示前 300 条）' : '')
+    : (WIKI_SUB || cat) + ' · ' + visible.length + ' 条';
+  visible.forEach(function(item, index){
+    var e = item.entry;
+    var d = document.createElement('button');
+    d.type = 'button';
     d.className = 'wiki-item';
-    d.innerHTML = '<div class="wiki-item-name">'+esc(e.name)+'</div><div class="wiki-item-desc">'+esc(e.desc.slice(0,40))+'</div>';
-    d.onclick = function(){ renderWikiDetail(e); };
+    d.dataset.wikiKey = wikiEntryKey(e, item.cat);
+    d.innerHTML = '<span class="wiki-item-name">'+esc(e.name)+'</span>' +
+      (q ? '<span class="wiki-badge">'+esc(item.cat)+'</span>' : '') +
+      '<span class="wiki-item-desc">'+esc(wikiExcerpt(e.desc, 48))+'</span>';
+    d.onclick = function(){ renderWikiDetail(e, item.cat, index); };
     box.appendChild(d);
   });
-  if (!items.length) box.innerHTML = '<div class="empty">无匹配条目</div>';
+  if (!visible.length){
+    box.innerHTML = '<div class="empty">没有匹配条目</div>';
+    if (selectFirst) $('wiki-detail').innerHTML = '<div class="empty">尝试其他分类或搜索词</div>';
+    return;
+  }
+  var currentIndex = visible.findIndex(function(item){
+    return WIKI_CURRENT && wikiEntryKey(item.entry, item.cat) === WIKI_CURRENT.key;
+  });
+  if (selectFirst || currentIndex < 0) renderWikiDetail(visible[0].entry, visible[0].cat, 0);
+  else setWikiActiveItem(WIKI_CURRENT.key);
 }
-function renderWikiDetail(e){
+function setWikiActiveItem(key){
+  document.querySelectorAll('.wiki-item').forEach(function(item){
+    var active = item.dataset.wikiKey === key;
+    item.classList.toggle('active', active);
+    if (active) item.setAttribute('aria-current', 'true');
+    else item.removeAttribute('aria-current');
+  });
+}
+function wikiParagraphs(text){
+  var blocks = String(text || '').replace(/\r/g, '').split(/\n\s*\n|\n/)
+    .map(function(p){ return p.trim(); }).filter(Boolean);
+  if (blocks.length !== 1 || blocks[0].length < 260) return blocks;
+  var sentences = blocks[0].match(/[^。！？!?；;]+[。！？!?；;]?/g) || blocks;
+  var result = [], current = '';
+  sentences.forEach(function(sentence){
+    if (current && current.length + sentence.length > 210){ result.push(current); current = ''; }
+    current += sentence;
+  });
+  if (current) result.push(current);
+  return result;
+}
+function renderWikiDetail(e, cat, index){
+  cat = cat || WIKI_CAT;
+  if (typeof index !== 'number') index = WIKI_VISIBLE.findIndex(function(item){ return item.entry === e; });
+  var key = wikiEntryKey(e, cat);
+  WIKI_CURRENT = {key: key, entry: e, cat: cat};
+  setWikiActiveItem(key);
+  var paragraphs = wikiParagraphs(e.desc);
+  var lead = paragraphs.shift() || '暂无条目摘要。';
+  var body = paragraphs.map(function(p){ return '<p>'+esc(p)+'</p>'; }).join('');
+  var prev = index > 0 ? WIKI_VISIBLE[index - 1] : null;
+  var next = index >= 0 && index < WIKI_VISIBLE.length - 1 ? WIKI_VISIBLE[index + 1] : null;
+  var sub = e.sub && e.sub !== '其他' ? '<div><dt>细分</dt><dd>'+esc(e.sub)+'</dd></div>' : '';
   $('wiki-detail').innerHTML =
-    '<div class="wiki-detail-name">'+esc(e.name)+'</div>' +
-    '<div class="wiki-detail-sec">📂 来源：'+esc(e.section)+'</div>' +
-    '<div class="wiki-detail-body">'+esc(e.desc)+'</div>' +
-    '<button class="btn btn-ghost" id="wiki-ask-btn">💬 问 AI 关于「'+esc(e.name)+'」</button>';
+    '<header class="wiki-article-head">' +
+      '<div class="wiki-eyebrow">'+esc(cat)+'条目</div>' +
+      '<h1 class="wiki-detail-name">'+esc(e.name)+'</h1>' +
+      '<div class="wiki-byline">来自蛊箓百科</div>' +
+    '</header>' +
+    '<div class="wiki-article-grid">' +
+      '<div class="wiki-article-copy">' +
+        '<p class="wiki-lead">'+esc(lead)+'</p>' +
+        (body ? '<section class="wiki-section"><h2>概述</h2>'+body+'</section>' : '') +
+        '<section class="wiki-section wiki-source"><h2>资料来源</h2><p>本条目整理自「'+esc(e.section || cat)+'」资料库。</p></section>' +
+      '</div>' +
+      '<aside class="wiki-infobox" aria-label="条目信息">' +
+        '<div class="wiki-infobox-title">条目信息</div>' +
+        '<dl><div><dt>名称</dt><dd>'+esc(e.name)+'</dd></div><div><dt>分类</dt><dd>'+esc(cat)+'</dd></div>'+sub+'<div><dt>来源</dt><dd>'+esc(e.section || cat)+'</dd></div></dl>' +
+        '<button class="btn btn-ghost wiki-ask" id="wiki-ask-btn">向 AI 询问此条目</button>' +
+      '</aside>' +
+    '</div>' +
+    '<nav class="wiki-neighbors" aria-label="相邻条目">' +
+      (prev ? '<button type="button" data-wiki-nav="prev"><span>上一篇</span>'+esc(prev.entry.name)+'</button>' : '<span></span>') +
+      (next ? '<button type="button" data-wiki-nav="next"><span>下一篇</span>'+esc(next.entry.name)+'</button>' : '<span></span>') +
+    '</nav>';
   document.getElementById('wiki-ask-btn').onclick = function(){ askAbout(e.name); };
+  var prevButton = document.querySelector('[data-wiki-nav="prev"]');
+  var nextButton = document.querySelector('[data-wiki-nav="next"]');
+  if (prevButton) prevButton.onclick = function(){ renderWikiDetail(prev.entry, prev.cat, index - 1); };
+  if (nextButton) nextButton.onclick = function(){ renderWikiDetail(next.entry, next.cat, index + 1); };
+  $('wiki-detail').scrollTop = 0;
 }
 function askAbout(name){
   switchTab('chat');
   $('q').value = '介绍一下' + name;
   ask();
 }
-$('wiki-search').addEventListener('input', function(){ renderWikiList(WIKI_CAT); });
+$('wiki-search').addEventListener('input', function(){ renderWikiList(WIKI_CAT, true); });
 
 /* ---------- 游戏：选择题 ---------- */
 var QUIZ_QS = [], QUIZ_IDX = 0, QUIZ_RIGHT = 0;

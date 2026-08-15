@@ -43,12 +43,15 @@ class AskReq(BaseModel):
 
 class SettingsReq(BaseModel):
     api_key: str | None = None
+    base_url: str | None = None
     model: str | None = None
     embed_model: str | None = None   # small / m3 / jina
 
 
 class TestReq(BaseModel):
     api_key: str | None = None
+    base_url: str | None = None
+    model: str | None = None
 
 
 class LocateReq(BaseModel):
@@ -93,6 +96,7 @@ def health():
         "ok": True,
         "has_key": bool(config.KEY),
         "key_set_in_ui": bool(config.KEY),
+        "base_url": config.BASE_URL,
         "model": config.MODEL,
         "embed_model": retriever.model_name,
         "stores": {name: s.n for name, s in retriever.stores.items()},
@@ -133,6 +137,8 @@ def ask(req: AskReq):
 def save_settings(req: SettingsReq):
     if req.api_key is not None:
         config.set_api_key(req.api_key)
+    if req.base_url is not None:
+        config.set_base_url(req.base_url)
     if req.model is not None:
         config.set_model(req.model)
     if req.embed_model is not None:
@@ -142,7 +148,8 @@ def save_settings(req: SettingsReq):
         except Exception as e:
             return JSONResponse({"ok": False, "error": f"模型切换失败：{e}"}, status_code=500)
     return {
-        "ok": True, "has_key": bool(config.KEY), "model": config.MODEL,
+        "ok": True, "has_key": bool(config.KEY), "base_url": config.BASE_URL,
+        "model": config.MODEL,
         "data_dir": str(config.DATA_DIR), "embed_model": str(config.DATA_DIR),
     }
 
@@ -150,22 +157,27 @@ def save_settings(req: SettingsReq):
 @app.post("/api/settings/test")
 def test_settings(req: TestReq):
     key = (req.api_key or config.KEY or "").strip()
+    base_url = (req.base_url or config.BASE_URL or "").strip()
+    model = (req.model or config.MODEL or "").strip()
     if not key:
         return {"ok": False, "error": "还没有填写 API Key"}
+    if not base_url:
+        return {"ok": False, "error": "还没有填写 Base URL"}
+    if not model:
+        return {"ok": False, "error": "还没有填写模型名"}
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=key, base_url=config.BASE_URL)
-        try:
-            models = client.models.list()
-            names = [m.id for m in models.data][:6]
-        except Exception:
-            # 有些代理不支持 /models，退化为一次极小的对话测试
-            resp = client.chat.completions.create(
-                model=config.MODEL, max_tokens=1,
-                messages=[{"role": "user", "content": "ping"}],
-            )
-            names = [resp.model]
-        return {"ok": True, "models": names, "message": "连接成功"}
+        client = OpenAI(api_key=key, base_url=base_url)
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=1,
+            messages=[{"role": "user", "content": "ping"}],
+        )
+        return {
+            "ok": True,
+            "models": [resp.model or model],
+            "message": "连接成功",
+        }
     except Exception as e:
         return {"ok": False, "error": str(e)[:300], "message": "连接失败"}
 
