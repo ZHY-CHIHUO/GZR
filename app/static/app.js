@@ -840,7 +840,7 @@ function askAbout(name){
 $('wiki-search').addEventListener('input', function(){ renderWikiList(WIKI_CAT, true); });
 
 /* ---------- 游戏：选择题 ---------- */
-var QUIZ_QS = [], QUIZ_IDX = 0, QUIZ_RIGHT = 0, QUIZ_N = 10;
+var QUIZ_QS = [], QUIZ_IDX = 0, QUIZ_RIGHT = 0, QUIZ_N = 10, QUIZ_SEL = -1;
 var QUIZ_T0 = 0, QUIZ_TIMER = null;
 function quizScore(){ return {t: +(localStorage.getItem('gzr.quizTotal')||0), c: +(localStorage.getItem('gzr.quizCorrect')||0)}; }
 function updateQuizScore(){
@@ -875,14 +875,22 @@ function renderQuizQ(){
   var q = QUIZ_QS[QUIZ_IDX];
   var html = '<div class="quiz-q">第 '+(QUIZ_IDX+1)+' / '+QUIZ_QS.length+' 题 · '+esc(q.q)+'</div>';
   q.options.forEach(function(opt, i){
-    html += '<button class="quiz-opt" onclick="answerQuiz('+i+')">' + esc(opt) + '</button>';
+    html += '<button class="quiz-opt" onclick="selectQuizOption('+i+')">' + esc(opt) + '</button>';
   });
+  html += '<button id="quiz-confirm" class="btn btn-primary" onclick="confirmQuiz()" disabled>确认答案</button>';
   html += '<div id="quiz-fb"></div>';
   $('quiz-body').innerHTML = html;
 }
-function answerQuiz(i){
+function selectQuizOption(i){
+  if (QUIZ_QS[QUIZ_IDX]._locked) return;
+  QUIZ_SEL = i;
+  document.querySelectorAll('.quiz-opt').forEach(function(b, idx){ b.classList.toggle('selected', idx === i); });
+  $('quiz-confirm').disabled = false;
+}
+function confirmQuiz(){
   var q = QUIZ_QS[QUIZ_IDX];
-  var right = (i === q.answer);
+  var right = (QUIZ_SEL === q.answer);
+  q._locked = true;
   if (right) QUIZ_RIGHT++;
   var s = quizScore();
   s.t++; if (right) s.c++;
@@ -892,11 +900,11 @@ function answerQuiz(i){
   fb.innerHTML = (right ? '答对了！' : '答错了，正确答案：<b>'+esc(q.options[q.answer])+'</b>') +
     '<br><span class="quiz-exp">'+esc(q.explain)+'</span>' +
     '<br><br><button class="btn btn-primary" onclick="renderQuizQ()">'+(QUIZ_IDX < QUIZ_QS.length-1 ? '下一题 →' : '查看成绩')+'</button>';
-  document.querySelectorAll('.quiz-opt').forEach(function(b){
+  document.querySelectorAll('.quiz-opt').forEach(function(b, idx){
     b.disabled = true;
-    if (b.textContent === q.options[q.answer]) b.style.borderColor = '#2e7d32';
-    b.style.borderWidth='2px';
+    if (idx === q.answer) b.classList.add('correct');
   });
+  $('quiz-confirm').disabled = true;
   QUIZ_IDX++;
 }
 function finishQuiz(){

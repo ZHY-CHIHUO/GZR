@@ -155,3 +155,12 @@ input, select, textarea{ font-size:14.5px; }
 .gh-empty{ padding:8px 0; color:var(--muted); font-size:13.5px; }
 .gh-clear{ text-align:right; margin-top:10px; }
 #game-history-btn{ white-space:nowrap; }
+/* ---- 答题区：无内部滚动、选中确认 ---- */
+#quiz-body{ overflow:hidden; justify-content:center; }
+#quiz-body .quiz-q{ font-size:16.5px; margin-bottom:6px; }
+#quiz-body .quiz-opt{ padding:9px 12px; min-height:40px; font-size:14.5px; margin:5px 0; }
+.quiz-opt.selected{ background:#F2F2EF; border-color:var(--accent); box-shadow:inset 3px 0 var(--accent); }
+.quiz-opt.correct{ border-color:#2e7d32; border-width:2px; }
+#quiz-confirm{ margin-top:10px; align-self:flex-start; }
+#quiz-fb{ font-size:14px; }
+.quiz-history{ max-height:26vh; }
