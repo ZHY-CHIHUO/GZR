@@ -201,7 +201,9 @@ def _combined_flat_toc():
             if pg:
                 items.append((c["n"], t, pg))
         if items:
-            out.append({"title": v["name"], "page": items[0][2], "depth": 0})
+            cover_page = max(1, items[0][2] - 1)
+            out.append({"title": v["name"], "page": cover_page, "depth": 0})
+            out.append({"title": "封面", "page": cover_page, "depth": 1})
             for n, t, pg in items:
                 out.append({"title": f"第{_int_to_cn(n)}节：{t}", "page": pg, "depth": 1})
     if extras:

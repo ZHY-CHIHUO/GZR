@@ -858,10 +858,9 @@ function renderPdfList(pdf, chs, chsKey){
     var end = (i < leaves.length - 1) ? (leaves[i + 1].page - 1) : 999999;
     chs.push({title: n.title, url: pdf.url, start: n.page || 1, end: end});
   });
-  (function assign(n){ if (n.children.length){ n.children.forEach(assign); n.idx = n.children[0].idx; n.cover = (n.children[0].page || 1) - 1; } })(stack[0]);
+  (function assign(n){ if (n.children.length){ n.children.forEach(assign); n.idx = n.children[0].idx; } })(stack[0]);
   function renderNode(n){
-    var coverAttr = (n.cover && n.children && n.children.length) ? ' data-cover="'+n.cover+'"' : '';
-    var link = '<span class="toc-link" data-idx="'+n.idx+'"'+coverAttr+' data-chs="'+chsKey+'">'+esc(n.title)+'</span>';
+    var link = '<span class="toc-link" data-idx="'+n.idx+'" data-chs="'+chsKey+'">'+esc(n.title)+'</span>';
     if (n.children.length){
       return '<details class="toc-node"><summary>'+link+'</summary>' +
         '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></details>';
@@ -870,7 +869,7 @@ function renderPdfList(pdf, chs, chsKey){
   }
   return tree.map(renderNode).join('');
 }
-function renderChapter(idx, chsKey, pane, startOverride){
+function renderChapter(idx, chsKey, pane){
   initPdfJs();
   var chs = chsKey === 'pdf' ? PDF_CHS : RZ_CHS;
   var ch = chs[idx];
@@ -885,7 +884,7 @@ function renderChapter(idx, chsKey, pane, startOverride){
   view.innerHTML = nav + '<div class="pdf-canvas-wrap"></div>' + nav;
   var wrap = view.querySelector('.pdf-canvas-wrap');
   getDoc(ch.url).then(function(doc){
-    var start = (startOverride != null) ? Math.max(1, startOverride) : ch.start;
+    var start = ch.start;
     var end = Math.min(ch.end, doc.numPages);
     (async function(){
       for (var p = start; p <= end; p++){
@@ -908,8 +907,8 @@ function renderChapter(idx, chsKey, pane, startOverride){
       wrap.scrollTop = 0;
     })();
   }).catch(function(e){ view.innerHTML = '<div class="empty">PDF 加载失败：'+esc(e.message)+'</div>'; });
-  pane.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); });
-  var target = pane.querySelector('.toc-link[data-idx="'+idx+'"]');
+  pane.querySelectorAll('.toc-link.cur').forEach(function(x){ x.classList.remove('cur'); });
+  var target = pane.querySelector('.toc-leaf .toc-link[data-idx="'+idx+'"]');
   if (target) target.classList.add('cur');
 }
 function prevChapter(){
@@ -958,9 +957,7 @@ function bindPdfTocClick(containerId, paneId, chsKey){
       ev.preventDefault();
       ev.stopPropagation();
       var idx = parseInt(t.getAttribute('data-idx'), 10);
-      if (isNaN(idx)) return;
-      var cover = parseInt(t.getAttribute('data-cover'), 10);
-      renderChapter(idx, chsKey, document.getElementById(paneId), isNaN(cover) ? null : cover);
+      if (!isNaN(idx)) renderChapter(idx, chsKey, document.getElementById(paneId));
     }
   });
 }
