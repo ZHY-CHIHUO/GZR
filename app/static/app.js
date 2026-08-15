@@ -878,7 +878,7 @@ function renderQuizQ(){
     html += '<button class="quiz-opt" onclick="selectQuizOption('+i+')">' + esc(opt) + '</button>';
   });
   html += '<button id="quiz-confirm" class="btn btn-primary" onclick="confirmQuiz()" disabled>确认答案</button>';
-  html += '<div id="quiz-fb"></div>';
+  html += '<div id="quiz-fb" class="quiz-fb"></div>';
   $('quiz-body').innerHTML = html;
 }
 function selectQuizOption(i){
@@ -898,13 +898,14 @@ function confirmQuiz(){
   updateQuizScore();
   var fb = $('quiz-fb');
   fb.innerHTML = (right ? '答对了！' : '答错了，正确答案：<b>'+esc(q.options[q.answer])+'</b>') +
-    '<br><span class="quiz-exp">'+esc(q.explain)+'</span>' +
-    '<br><br><button class="btn btn-primary" onclick="renderQuizQ()">'+(QUIZ_IDX < QUIZ_QS.length-1 ? '下一题 →' : '查看成绩')+'</button>';
+    '<br><span class="quiz-exp">'+esc(q.explain)+'</span>';
+  var btn = $('quiz-confirm');
+  btn.textContent = (QUIZ_IDX < QUIZ_QS.length-1 ? '下一题 →' : '查看成绩');
+  btn.onclick = function(){ renderQuizQ(); };
   document.querySelectorAll('.quiz-opt').forEach(function(b, idx){
     b.disabled = true;
     if (idx === q.answer) b.classList.add('correct');
   });
-  $('quiz-confirm').disabled = true;
   QUIZ_IDX++;
 }
 function finishQuiz(){
