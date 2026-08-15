@@ -486,6 +486,16 @@ function scrollToLore(anchor){
   var el = document.getElementById(anchor);
   if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
 }
+$('lore-toc').querySelector('.toc-body').addEventListener('click', function(ev){
+  var el = ev.target;
+  if (el.classList && el.classList.contains('toc-arrow')){
+    var node = el.closest ? el.closest('.toc-node') : null;
+    if (node) node.classList.toggle('open');
+  } else if (el.classList && el.classList.contains('toc-link')){
+    var a = el.getAttribute('data-anchor');
+    if (a) scrollToLore(a);
+  }
+});
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===name); });
   ['chat','read','wiki','game','settings'].forEach(function(t){ $('tab-'+t).hidden = (t !== name); });
@@ -583,6 +593,7 @@ async function ask(){
   $('q').value=''; $('send').disabled = true;
   HISTORY.push({role:'user', content: question});
   addMsg(esc(question), 'user');
+  renderChatNavList();
   var d = addMsg('思考中…', 'bot');
   try {
     var r = await fetch('/api/ask', {method:'POST', headers:{'Content-Type':'application/json'},
@@ -1065,12 +1076,12 @@ function renderLore(){
     var html = '';
     if (n.children.length){
       html += '<div class="toc-node open">' +
-        '<span class="toc-arrow" onclick="this.parentNode.classList.toggle(\'open\')"></span>' +
-        '<span class="toc-link" onclick="scrollToLore(\''+n.anchor+'\')">'+esc(n.text)+'</span>' +
+        '<span class="toc-arrow" data-act="toggle"></span>' +
+        '<span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span>' +
         '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></div>';
     } else {
       html += '<div class="toc-node leaf"><span class="toc-dot"></span>' +
-        '<span class="toc-link" onclick="scrollToLore(\''+n.anchor+'\')">'+esc(n.text)+'</span></div>';
+        '<span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span></div>';
     }
     return html;
   }
