@@ -932,7 +932,7 @@ function addCustomQuestion(){
     var rtype = $('cq-rtype').value;
     var hints = ($('cq-rhints').value || '').split(/\n+/).map(function(s){ return s.trim(); }).filter(Boolean);
     if (!name){ toast('请填写谜底名称'); return; }
-    if (hints.length < 2){ toast('至少填写两条提示（建议 5~10 条）'); return; }
+    if (hints.length < 5){ toast('提示不足 5 条（当前 '+hints.length+' 条），已剔除：请补足 5~10 条'); return; }
     var dup = list.some(function(c){ return c.kind === 'riddle' && c.type === rtype && c.name === name; });
     if (dup){ toast('题库中已有相同谜底，未添加'); return; }
     ensureDefaultQuizAll().then(function(){
@@ -970,7 +970,7 @@ function importCustomQuiz(){
   try { arr = JSON.parse(raw); } catch(e){ toast('JSON 解析失败：'+e.message); return; }
   if (!Array.isArray(arr) || !arr.length){ toast('需要是一个 JSON 数组'); return; }
   var okQuiz = {gu:1, person:1, type:1}, okRiddle = {gu:1, person:1, item:1};
-  var added = 0, skippedBad = 0, skippedDup = 0, skippedDefault = 0;
+  var added = 0, skippedBad = 0, skippedDup = 0, skippedDefault = 0, skippedShort = 0;
   var list = customQuiz();
   var seen = {};
   list.forEach(function(it){
@@ -981,7 +981,8 @@ function importCustomQuiz(){
   arr.forEach(function(item){
     if (!item || typeof item !== 'object'){ skippedBad++; return; }
     if (item.kind === 'riddle'){
-      if (!item.name || !Array.isArray(item.hints) || item.hints.length < 2 || !okRiddle[item.type]){ skippedBad++; return; }
+      if (!item.name || !Array.isArray(item.hints) || !okRiddle[item.type]){ skippedBad++; return; }
+      if (item.hints.length < 5){ skippedShort++; return; }
       batch.push({kind:'riddle', type:item.type, name:String(item.name).trim(), hints:item.hints.map(String).map(function(h){ return h.trim(); })});
       return;
     }
@@ -1017,6 +1018,7 @@ function importCustomQuiz(){
     var msg = '导入成功 ' + added + ' 条';
     if (skippedDup) msg += '，剔除重复 ' + skippedDup + ' 条';
     if (skippedDefault) msg += '，与默认题库重复剔除 ' + skippedDefault + ' 条';
+    if (skippedShort) msg += '，提示不足5条剔除 ' + skippedShort + ' 条';
     if (skippedBad) msg += '，剔除格式不符 ' + skippedBad + ' 条';
     toast(msg);
   });
