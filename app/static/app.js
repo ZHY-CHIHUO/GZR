@@ -911,19 +911,38 @@ function switchCqKind(k){
   $('cq-quiz-fields').hidden = k !== 'quiz';
   $('cq-riddle-fields').hidden = k !== 'riddle';
 }
+var DEFAULT_QUIZ_ALL = null;
+async function ensureDefaultQuizAll(){
+  if (DEFAULT_QUIZ_ALL) return DEFAULT_QUIZ_ALL;
+  try { DEFAULT_QUIZ_ALL = await (await fetch('/api/quiz/all')).json(); }
+  catch(e){ DEFAULT_QUIZ_ALL = {questions: [], riddle_names: {}}; }
+  return DEFAULT_QUIZ_ALL;
+}
+function isDefaultDupQuiz(q){ return DEFAULT_QUIZ_ALL && DEFAULT_QUIZ_ALL.questions.indexOf(q) >= 0; }
+function isDefaultDupRiddle(type, name){
+  if (!DEFAULT_QUIZ_ALL || !DEFAULT_QUIZ_ALL.riddle_names) return false;
+  var arr = DEFAULT_QUIZ_ALL.riddle_names[type] || [];
+  return arr.indexOf(name) >= 0;
+}
 function addCustomQuestion(){
   var kind = CQ_KIND;
   var list = customQuiz();
   if (kind === 'riddle'){
     var name = ($('cq-rname').value || '').trim();
+    var rtype = $('cq-rtype').value;
     var hints = ($('cq-rhints').value || '').split(/\n+/).map(function(s){ return s.trim(); }).filter(Boolean);
     if (!name){ toast('请填写谜底名称'); return; }
     if (hints.length < 2){ toast('至少填写两条提示（建议 5~10 条）'); return; }
-    list.push({kind: 'riddle', type: $('cq-rtype').value, name: name, hints: hints.slice(0, 10)});
-    saveCustomQuiz(list);
-    $('cq-rname').value = ''; $('cq-rhints').value = '';
-    $('cq-count').textContent = list.length;
-    renderCustomQuizList(); toast('已添加猜谜题，玩猜谜时会混入');
+    var dup = list.some(function(c){ return c.kind === 'riddle' && c.type === rtype && c.name === name; });
+    if (dup){ toast('题库中已有相同谜底，未添加'); return; }
+    ensureDefaultQuizAll().then(function(){
+      if (isDefaultDupRiddle(rtype, name)){ toast('该谜底与默认题库重复，未添加'); return; }
+      list.push({kind: 'riddle', type: rtype, name: name, hints: hints.slice(0, 10)});
+      saveCustomQuiz(list);
+      $('cq-rname').value = ''; $('cq-rhints').value = '';
+      $('cq-count').textContent = list.length;
+      renderCustomQuizList(); toast('已添加猜谜题，玩猜谜时会混入');
+    });
     return;
   }
   var type = $('cq-type').value;
@@ -933,11 +952,16 @@ function addCustomQuestion(){
   var exp = ($('cq-exp').value || '').trim();
   if (!q || opts.some(function(o){ return !o; })){ toast('请填写题目和四个选项'); return; }
   if (opts.some(function(o, i){ return opts.indexOf(o) !== i; })){ toast('四个选项不能重复'); return; }
-  list.push({kind: 'quiz', type: type, q: q, options: opts, answer: ans, explain: exp || '自定义题目'});
-  saveCustomQuiz(list);
-  $('cq-q').value = ''; [0,1,2,3].forEach(function(i){ $('cq-o'+i).value = ''; }); $('cq-exp').value = '';
-  $('cq-count').textContent = list.length;
-  renderCustomQuizList(); toast('已添加，开始答题时会混入题库');
+  var dup = list.some(function(c){ return c.kind !== 'riddle' && c.q === q; });
+  if (dup){ toast('题库中已有相同题目，未添加'); return; }
+  ensureDefaultQuizAll().then(function(){
+    if (isDefaultDupQuiz(q)){ toast('该题目与默认题库重复，未添加'); return; }
+    list.push({kind: 'quiz', type: type, q: q, options: opts, answer: ans, explain: exp || '自定义题目'});
+    saveCustomQuiz(list);
+    $('cq-q').value = ''; [0,1,2,3].forEach(function(i){ $('cq-o'+i).value = ''; }); $('cq-exp').value = '';
+    $('cq-count').textContent = list.length;
+    renderCustomQuizList(); toast('已添加，开始答题时会混入题库');
+  });
 }
 function importCustomQuiz(){
   var raw = ($('cq-import').value || '').trim();
@@ -946,28 +970,56 @@ function importCustomQuiz(){
   try { arr = JSON.parse(raw); } catch(e){ toast('JSON 解析失败：'+e.message); return; }
   if (!Array.isArray(arr) || !arr.length){ toast('需要是一个 JSON 数组'); return; }
   var okQuiz = {gu:1, person:1, type:1}, okRiddle = {gu:1, person:1, item:1};
-  var added = 0, skipped = 0;
+  var added = 0, skippedBad = 0, skippedDup = 0, skippedDefault = 0;
   var list = customQuiz();
-  arr.forEach(function(item){
-    if (!item || typeof item !== 'object'){ skipped++; return; }
-    if (item.kind === 'riddle'){
-      if (item.name && Array.isArray(item.hints) && item.hints.length >= 2 && okRiddle[item.type]){
-        list.push({kind: 'riddle', type: item.type, name: String(item.name).trim(), hints: item.hints.map(String).map(function(h){ return h.trim(); })});
-        added++; return;
-      }
-      skipped++; return;
-    }
-    if (item.q && Array.isArray(item.options) && item.options.length === 4 && typeof item.answer === 'number' && item.answer >= 0 && item.answer < 4 && okQuiz[item.type]){
-      list.push({kind: 'quiz', type: item.type, q: String(item.q).trim(), options: item.options.map(String).map(function(o){ return o.trim(); }), answer: item.answer, explain: String(item.explain || 'AI 导入题目')});
-      added++; return;
-    }
-    skipped++;
+  var seen = {};
+  list.forEach(function(it){
+    if (it.kind === 'riddle') seen['r:' + it.type + ':' + it.name] = 1;
+    else seen['q:' + it.q] = 1;
   });
-  saveCustomQuiz(list);
-  $('cq-count').textContent = list.length;
-  $('cq-import').value = '';
-  renderCustomQuizList();
-  toast('导入成功 '+added+' 条' + (skipped ? '，跳过 '+skipped+' 条格式不符' : ''));
+  var batch = [];
+  arr.forEach(function(item){
+    if (!item || typeof item !== 'object'){ skippedBad++; return; }
+    if (item.kind === 'riddle'){
+      if (!item.name || !Array.isArray(item.hints) || item.hints.length < 2 || !okRiddle[item.type]){ skippedBad++; return; }
+      batch.push({kind:'riddle', type:item.type, name:String(item.name).trim(), hints:item.hints.map(String).map(function(h){ return h.trim(); })});
+      return;
+    }
+    if (!item.q || !Array.isArray(item.options) || item.options.length !== 4 || typeof item.answer !== 'number' || item.answer < 0 || item.answer >= 4 || !okQuiz[item.type]){ skippedBad++; return; }
+    batch.push({kind:'quiz', type:item.type, q:String(item.q).trim(), options:item.options.map(String).map(function(o){ return o.trim(); }), answer:item.answer, explain:String(item.explain || 'AI 导入题目')});
+  });
+  // 批内去重 + 与自定义题库去重
+  var batchSeen = {};
+  var unique = [];
+  batch.forEach(function(it){
+    var key = it.kind === 'riddle' ? 'r:' + it.type + ':' + it.name : 'q:' + it.q;
+    if (seen[key] || batchSeen[key]){ skippedDup++; return; }
+    batchSeen[key] = 1;
+    unique.push(it);
+  });
+  // 异步与默认题库去重后入库
+  ensureDefaultQuizAll().then(function(d){
+    var final = [];
+    unique.forEach(function(it){
+      if (it.kind === 'riddle'){
+        if (isDefaultDupRiddle(it.type, it.name)){ skippedDefault++; return; }
+      } else {
+        if (isDefaultDupQuiz(it.q)){ skippedDefault++; return; }
+      }
+      final.push(it);
+      added++;
+    });
+    list = list.concat(final);
+    saveCustomQuiz(list);
+    $('cq-count').textContent = list.length;
+    $('cq-import').value = '';
+    renderCustomQuizList();
+    var msg = '导入成功 ' + added + ' 条';
+    if (skippedDup) msg += '，剔除重复 ' + skippedDup + ' 条';
+    if (skippedDefault) msg += '，与默认题库重复剔除 ' + skippedDefault + ' 条';
+    if (skippedBad) msg += '，剔除格式不符 ' + skippedBad + ' 条';
+    toast(msg);
+  });
 }
 function renderQuizQ(){
   if (QUIZ_IDX >= QUIZ_QS.length){ finishQuiz(); return; }

@@ -370,6 +370,16 @@ def quiz_pick(req: QuizReq):
     return {"questions": picked}
 
 
+@app.get("/api/quiz/all")
+def quiz_all():
+    """返回默认题库全部题目文本与谜底名称（供自定义题库去重使用）。"""
+    _load_content()
+    return {
+        "questions": [x["q"] for x in _quiz["quiz"]],
+        "riddle_names": {k: [x["name"] for x in v] for k, v in _quiz["riddles"].items()},
+    }
+
+
 class RiddleReq(BaseModel):
     type: str = "gu"   # gu / person / item
     n: int = 1
