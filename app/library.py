@@ -11,8 +11,24 @@ PDF_ROOT = BASE.parent / "gu_zhen_ren_pdf"
 LORE_DOCX = BASE.parent / "gu-zhenren-lore" / "蛊真人资料合集.docx"
 
 
+_CN = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+
+
+def _cn_vol_num(s: str):
+    """提取 第N卷/章/节 的汉字数字并转整数（支持 一~九、十、几十、几十几）。"""
+    m = re.search(r"第([一二三四五六七八九十]+)(?:卷|章|节)", s)
+    if not m:
+        return 0
+    txt = m.group(1)
+    if "十" not in txt:
+        return _CN.get(txt, 0)
+    a, _, b = txt.partition("十")
+    return (_CN.get(a, 1) if a else 1) * 10 + _CN.get(b, 0)
+
+
 def _natural_key(s: str):
-    return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)]
+    # 汉字数字卷/章序优先（“第二卷” < “第三卷”），其余按数字/字符兜底
+    return (_cn_vol_num(s), [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", s)])
 
 
 def _first_title(lines):

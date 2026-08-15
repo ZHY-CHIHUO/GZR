@@ -593,7 +593,10 @@ function renderPdfLists(pdfs){
     it.onclick = function(){
       list.querySelectorAll('.pdf-item').forEach(function(x){ x.classList.remove('active'); });
       it.classList.add('active');
-      pane.querySelector('.pdf-view').innerHTML = '<iframe src="'+p.url+'"></iframe>';
+      pane.querySelector('.pdf-view').innerHTML =
+        '<div style="padding:8px 10px;border-bottom:1px solid #e5e0d6;font-size:13px">📄 '+esc(p.name)+
+        ' <a class="dl-btn" style="margin-left:10px;padding:3px 10px" href="'+p.url+'" target="_blank">↗ 新标签页打开</a></div>' +
+        '<iframe src="'+p.url+'?_t='+Date.now()+'"></iframe>';
     };
     list.appendChild(it);
   });

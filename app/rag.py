@@ -99,17 +99,20 @@ class Retriever:
         qt = bigram_tokens(query)
         hits = []
         if scope in ("all", "novel") and "novel" in self.stores:
-            merged = list(self.stores["novel"].search(qv, qt, k))
+            # 正文为主（前 k-1 位）；摘要库小、库内排名不可跨库比较，仅作补位且需过相似度门槛
+            merged = list(self.stores["novel"].search(qv, qt, max(1, k - 1)))
             if "novel_sum" in self.stores:
                 seen = {(h.get("vol"), h.get("chapter")) for h in merged}
-                for h in self.stores["novel_sum"].search(qv, qt, k):
-                    key = (h.get("vol"), h.get("chapter"))
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    h["via_summary"] = True
-                    merged.append(h)
-            merged.sort(key=lambda h: -h.get("_rrf", 0))
+                sum_sim = self.stores["novel_sum"].vectors @ qv
+                if float(np.max(sum_sim)) >= 0.42:  # 绝对相似度门槛，防不相关摘要占位
+                    for h in self.stores["novel_sum"].search(qv, qt, k):
+                        key = (h.get("vol"), h.get("chapter"))
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        h["via_summary"] = True
+                        merged.append(h)
+                        break  # 只补一个摘要位
             hits.extend(merged[:k])
         if scope in ("all", "lore") and "lore" in self.stores:
             lore_hits = self.stores["lore"].search(qv, qt, k)
