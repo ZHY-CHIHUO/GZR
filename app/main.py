@@ -4,6 +4,7 @@
 """
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -196,6 +197,14 @@ def _web_back_to_rag(web_answer, q, scope):
         return []
 
 
+def _supplement_irrelevant(merged):
+    """补充检索的内容与问题无关（非《蛊真人》内容）时返回 True：
+    不展示资料库依据卡片，整体回退为纯网络回答。"""
+    if any(m in merged for m in ("资料库未收录相关内容", "资料库未检索到", "基于通用知识的回答", "没有检索到")):
+        return True
+    return not bool(re.search(r"\[\d{1,2}\]", merged))
+
+
 @app.post("/api/ask")
 def ask(req: AskReq):
     q = (req.question or "").strip()
@@ -239,9 +248,12 @@ def ask(req: AskReq):
                     if extra:
                         try:
                             sys2, usr2 = build_prompt(q, extra, config.EXCERPT_CHARS)
-                            usr2 += "\n\n另附网络检索到的背景资料（仅供参考，不作为资料库依据）：\n" + web_answer[:600]
+                            usr2 += ("\n\n注意：以上【参考资料】是补充检索的结果。"
+                                     "若这些条目与本问题无关（例如本问题涉及的不是《蛊真人》内容），"
+                                     "请在回答开头明确写『资料库未收录相关内容』，不要引用资料库条目编号，也不列『依据来源』行。"
+                                     "\n\n另附网络检索到的背景资料（仅供参考，不作为资料库依据）：\n" + web_answer[:600])
                             merged = ask_llm(sys2, usr2, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
-                            if merged and merged.strip():
+                            if merged and merged.strip() and not _supplement_irrelevant(merged):
                                 combined = True
                                 answer = "（首次检索未命中，以下为结合资料库补充检索与网络检索的整合回答）\n\n" + merged
                                 extra_sources = [format_source(h) for h in extra]
