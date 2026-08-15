@@ -11,13 +11,13 @@
 </head>
 <body>
 <header>
-  <div class="logo">📜 蛊箓 · 蛊真人维基百科</div>
+  <div class="logo">蛊箓 · 蛊真人维基百科</div>
   <nav>
-    <button class="tab active" data-tab="chat">💬 问答</button>
-    <button class="tab" data-tab="read">📖 阅读</button>
-    <button class="tab" data-tab="wiki">📚 百科</button>
-    <button class="tab" data-tab="game">🎮 游戏</button>
-    <button class="tab" data-tab="settings">⚙️ 设置</button>
+    <button class="tab active" data-tab="chat">问答</button>
+    <button class="tab" data-tab="read">阅读</button>
+    <button class="tab" data-tab="wiki">百科</button>
+    <button class="tab" data-tab="game">游戏</button>
+    <button class="tab" data-tab="settings">设置</button>
   </nav>
   <span id="status" class="pill warn">检测中…</span>
 </header>
@@ -27,11 +27,11 @@
   <section id="tab-chat" class="panel">
     <div class="chat-main">
       <div class="toc-pane" id="chat-nav-pane">
-        <div class="toc-head"><span class="toc-title">🧭 对话</span><button class="toc-fold" onclick="toggleChatNavPane()" title="收起/展开">«</button></div>
+        <div class="toc-head"><span class="toc-title">对话</span><button class="toc-fold" onclick="toggleChatNavPane()" title="收起/展开">«</button></div>
         <div class="chat-nav-body">
-          <input id="chat-search" placeholder="🔍 搜索记录…" autocomplete="off">
+          <input id="chat-search" placeholder=" 搜索记录…" autocomplete="off">
           <div id="chat-nav-list"></div>
-          <button class="tool-btn full" onclick="clearChat()">🗑 清空全部</button>
+          <button class="tool-btn full" onclick="clearChat()">清空全部</button>
         </div>
         <div id="nav-context" class="nav-context">
           <div onclick="navDel()">删除</div>
@@ -44,9 +44,9 @@
         <div id="suggest"></div>
         <footer class="chat-bar">
           <select id="scope" title="检索范围">
-            <option value="all">📚 全部库</option>
-            <option value="novel">📖 仅正文</option>
-            <option value="lore">🗂️ 仅设定</option>
+            <option value="all">全部库</option>
+            <option value="novel">仅正文</option>
+            <option value="lore">仅设定</option>
           </select>
           <input id="q" placeholder="输入问题，回车发送（支持追问上下文）" autocomplete="off">
           <button id="send">发送</button>
@@ -58,14 +58,14 @@
   <!-- 阅读 -->
   <section id="tab-read" class="panel" hidden>
     <div class="read-tabs">
-      <button class="rtab active" data-rt="novel">📄 原版</button>
-      <button class="rtab" data-rt="pdf">🖼️ 插图版</button>
-      <button class="rtab" data-rt="rz">📜 人祖传</button>
-      <button class="rtab" data-rt="lore">📚 资料合集</button>
+      <button class="rtab active" data-rt="novel">原版</button>
+      <button class="rtab" data-rt="pdf">插图版</button>
+      <button class="rtab" data-rt="rz">人祖传</button>
+      <button class="rtab" data-rt="lore">资料合集</button>
     </div>
     <div id="read-novel" class="read-pane">
       <div class="toc-pane" id="novel-toc">
-        <div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="toggleToc()" title="收起/展开目录">«</button></div>
+        <div class="toc-head"><span class="toc-title">目录</span><button class="toc-fold" onclick="toggleToc()" title="收起/展开目录">«</button></div>
         <div class="toc-body"><div class="empty">目录加载中…</div></div>
       </div>
       <div class="text-pane"><div class="empty">从左侧选择章节开始阅读</div></div>
@@ -74,7 +74,7 @@
     <div id="read-rz" class="read-pane" hidden><div class="empty">加载中…</div></div>
     <div id="read-lore" class="read-pane" hidden>
       <div class="toc-pane" id="lore-toc">
-        <div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="toggleLoreToc()" title="收起/展开目录">«</button></div>
+        <div class="toc-head"><span class="toc-title">目录</span><button class="toc-fold" onclick="toggleLoreToc()" title="收起/展开目录">«</button></div>
         <div class="toc-body"><div class="empty">加载中…</div></div>
       </div>
       <div class="text-pane" id="lore-text"><div class="empty">加载中…</div></div>
@@ -107,10 +107,10 @@
   <section id="tab-game" class="panel" hidden>
     <div class="game-wrap">
       <div class="read-tabs">
-        <button class="rtab active" data-gt="quiz">📝 选择题</button>
-        <button class="rtab" data-gt="riddle-gu">🐛 猜蛊虫</button>
-        <button class="rtab" data-gt="riddle-person">👤 猜人物</button>
-        <button class="rtab" data-gt="riddle-item">🎁 猜物品</button>
+        <button class="rtab active" data-gt="quiz">选择题</button>
+        <button class="rtab" data-gt="riddle-gu">猜蛊虫</button>
+        <button class="rtab" data-gt="riddle-person">猜人物</button>
+        <button class="rtab" data-gt="riddle-item">猜物品</button>
       </div>
       <div id="game-quiz" class="game-pane">
         <div class="game-top">
@@ -127,8 +127,8 @@
       </div>
       <div id="game-riddle" class="game-pane" hidden>
         <div class="game-top">
-          <span id="riddle-label" class="game-label">🐛 猜蛊虫</span>
-          <button class="btn btn-primary" onclick="newRiddle()">🎲 来一道</button>
+          <span id="riddle-label" class="game-label">猜蛊虫</span>
+          <button class="btn btn-primary" onclick="newRiddle()">来一道</button>
           <span id="riddle-score" class="game-score">累计 0 分</span>
         </div>
         <div id="riddle-body" class="game-body"><div class="empty">点击「来一道」，根据提示猜答案！</div></div>
@@ -140,7 +140,7 @@
   <section id="tab-settings" class="panel" hidden>
     <div class="settings-wrap">
       <div class="card connection-card">
-        <h3><span class="step-no">1</span> AI 服务连接</h3>
+        <h3><span class="step-no">1</span>AI 服务连接</h3>
         <p>填写任意 OpenAI 兼容服务的连接参数。可使用 OpenAI、DeepSeek、硅基流动、火山方舟或本地 Ollama 等服务。</p>
         <div class="settings-fields">
           <label for="base-url">Base URL</label>
@@ -163,7 +163,7 @@
         <div class="result" id="key-result" aria-live="polite"></div>
       </div>
       <div class="card">
-        <h3><span class="step-no">2</span> 检索模型（影响准确率与速度）</h3>
+        <h3><span class="step-no">2</span>检索模型（影响准确率与速度）</h3>
         <p>不同向量模型的准确率与查询速度不同（实测数据见选项说明）。切换后自动重建检索器，无需重启。</p>
         <select id="embed-model" class="field-wide"></select>
         <div class="result" id="model-result"></div>
@@ -186,14 +186,14 @@
         <li>点击右上角「注册 / 登录」，用手机号或邮箱完成注册</li>
         <li>登录后，左侧菜单找到 <b>「API Keys」</b>，点击进入</li>
         <li>点击 <b>「创建 API Key」</b>，随便填个名字（比如 gzr），点创建</li>
-        <li>创建后立刻 <b>复制</b> 那串以 <code>sk-</code> 开头的字符串（⚠️ 只显示这一次，务必先复制保存）</li>
+        <li>创建后立刻 <b>复制</b>那串以 <code>sk-</code>开头的字符串（ 只显示这一次，务必先复制保存）</li>
         <li>（可选）在「费用」页 <b>充值</b>：新账号通常有赠送额度；用完再充，最低 ¥10 能用很久</li>
         <li>回到本应用「设置」页，把复制的 Key 粘贴进输入框，点 <b>「保存并测试连接」</b></li>
-        <li>显示「连接成功」后，去「问答」页提问即可 🎉</li>
+        <li>显示「连接成功」后，去「问答」页提问即可 </li>
       </ol>
       <h4>注意事项</h4>
       <ul>
-        <li>Key 只保存在<b>本机</b>的 <code>.env</code> 文件里，不会上传到任何地方，请勿泄露给他人</li>
+        <li>Key 只保存在<b>本机</b>的 <code>.env</code>文件里，不会上传到任何地方，请勿泄露给他人</li>
         <li>不配置 Key 也能用：问答页会显示「检索测试模式」，只能看到检索到的章节，没有 AI 回答</li>
         <li>官方价格与说明见 <code>https://api-docs.deepseek.com</code></li>
       </ul>
