@@ -57,10 +57,12 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .toc-fold:hover{background:#f0e9da;}
 .toc-body{overflow-y:auto;max-height:100%;}
 #read-novel .toc-pane{transition:width .2s ease;}
-#read-novel .toc-pane.collapsed{width:30px;min-width:30px;padding:6px 4px;}
+#read-novel .toc-pane.collapsed{width:30px;min-width:30px;padding:6px 4px;border:none;background:transparent;box-shadow:none;}
 #read-novel .toc-pane.collapsed .toc-body{display:none;}
 #read-novel .toc-pane.collapsed .toc-title{display:none;}
-#read-novel .toc-pane.collapsed .toc-fold{border:none;background:transparent;font-size:16px;padding:2px 4px;}
+#read-novel .toc-pane.collapsed .toc-head{justify-content:center;}
+#read-novel .toc-pane.collapsed .toc-fold{border:none;background:rgba(176,141,87,.15);font-size:16px;padding:2px 8px;border-radius:8px;color:#7a5c3e;opacity:.5;transition:opacity .15s;}
+#read-novel .toc-pane.collapsed:hover .toc-fold{opacity:1;background:rgba(176,141,87,.3);}
 .toc-chapters{display:none;padding-left:12px;}
 .toc-vol.open .toc-chapters{display:block;}
 .ch-item{padding:3px 8px;font-size:12px;cursor:pointer;border-radius:4px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -346,9 +348,13 @@ var MODELS = [];    // 检索模型选项
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+function toast(msg){ var t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){ t.classList.remove('show'); }, 2600); }
+function closeModal(id){ $(id).classList.remove('show'); }
 /* 轻量 Markdown 渲染（先转义保证安全，再处理标记） */
 function mdRender(text){
   var s = esc(text);
+  // 删除回答末尾的"依据来源：[N]"标号行（下方已直接列出引用片段）
+  s = s.replace(/^依据来源[：:][\[\]\d\s、，]*$/gm, '');
   s = s.replace(/~~~([\s\S]*?)~~~/g, '<pre>$1</pre>');
   s = s.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
   s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -463,7 +469,36 @@ function renderSuggest(){
 }
 function addMsg(html, cls){
   var d = document.createElement('div'); d.className='msg '+cls; d.innerHTML = html;
-  $('chat').appendChild(d); $('chat').scrollTop = $('chat').scrollHeight; return d;
+  $('chat').appendChild(d); $('chat').scrollTop = $('chat').scrollHeight;
+  saveChat();
+  return d;
+}
+function saveChat(){
+  var msgs = [];
+  document.querySelectorAll('#chat .msg').forEach(function(m){
+    if (m.id === 'no-key-guide') return;
+    msgs.push({cls: m.className.replace('msg ',''), html: m.innerHTML});
+  });
+  if (msgs.length > 40) msgs = msgs.slice(-40);
+  try { localStorage.setItem('gzr.chat', JSON.stringify(msgs)); } catch(e){}
+  try { localStorage.setItem('gzr.chatHistory', JSON.stringify(HISTORY)); } catch(e){}
+}
+function loadChat(){
+  try {
+    var msgs = JSON.parse(localStorage.getItem('gzr.chat') || '[]');
+    var hist = JSON.parse(localStorage.getItem('gzr.chatHistory') || '[]');
+    if (hist && hist.length) HISTORY = hist;
+    if (msgs.length){
+      $('chat').innerHTML = '';
+      msgs.forEach(function(m){
+        var d = document.createElement('div');
+        d.className = 'msg ' + m.cls;
+        d.innerHTML = m.html;
+        $('chat').appendChild(d);
+      });
+      $('chat').scrollTop = $('chat').scrollHeight;
+    }
+  } catch(e){}
 }
 function attrEsc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function renderSources(sources){
@@ -964,6 +999,7 @@ document.querySelectorAll('.rtab[data-gt]').forEach(function(btn){
 });
 
 /* ---------- 启动 ---------- */
+loadChat();
 renderSuggest();
 refreshHealth();
 loadModels();
