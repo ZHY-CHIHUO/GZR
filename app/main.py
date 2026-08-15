@@ -207,7 +207,17 @@ def ask(req: AskReq):
     else:
         answer = mock_answer(hits)
         mock = True
-    if web_used:
+    # 通用知识/网络回答：不展示资料库来源卡片、LLM 编造的『依据来源』行与相关词条（避免与资料库无关的误匹配）
+    gen_knowledge = not web_used and (
+        "资料库未检索到相关内容" in answer or "基于通用知识的回答" in answer
+    )
+    if gen_knowledge:
+        import re as _re
+        lines = answer.rstrip().split("\n")
+        while lines and lines[-1].strip().startswith("依据来源"):
+            lines.pop()
+        answer = "\n".join(lines).rstrip()
+    if web_used or gen_knowledge:
         shown_sources = web_sources
     else:
         shown_sources = [format_source(h) for h in hits] + web_sources
@@ -217,7 +227,7 @@ def ask(req: AskReq):
         "cost_rmb": estimate_cost(system, user, answer) if not mock else 0.0,
         "mock": mock,
         "web": web_used,
-        "wiki_cites": _wiki_cites_in(answer),
+        "wiki_cites": [] if (web_used or gen_knowledge) else _wiki_cites_in(answer),
     }
 
 
