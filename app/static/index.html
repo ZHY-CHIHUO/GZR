@@ -213,28 +213,47 @@
 <div class="modal-bg" id="custom-quiz-modal">
   <div class="modal modal-wide">
     <div class="modal-head"><h2>自定义题库</h2><button class="modal-x" onclick="closeModal('custom-quiz-modal')">×</button></div>
-    <div class="modal-body">
-      <div class="cq-form">
-        <div class="cq-row"><label>题型</label><select id="cq-kind" onchange="toggleCqKind()"><option value="quiz">选择题</option><option value="riddle">猜谜题</option></select></div>
-        <div id="cq-quiz-fields">
-          <div class="cq-row"><label>分类</label><select id="cq-type"><option value="gu">蛊虫题</option><option value="person">人物题</option><option value="type">蛊虫类型题</option></select></div>
-          <div class="cq-row"><label>题目</label><textarea id="cq-q" rows="2" placeholder="输入题目内容"></textarea></div>
-          <div class="cq-row"><label>选项</label><div class="cq-opts"><input id="cq-o0" placeholder="选项 A"><input id="cq-o1" placeholder="选项 B"><input id="cq-o2" placeholder="选项 C"><input id="cq-o3" placeholder="选项 D"></div></div>
-          <div class="cq-row"><label>正确答案</label><select id="cq-ans"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>
-          <div class="cq-row"><label>解析</label><input id="cq-exp" placeholder="可选：答案解析"></div>
+    <div class="modal-body cq-body">
+      <div class="cq-section">
+        <div class="cq-section-title"><span class="cq-step">1</span>新增一题</div>
+        <div class="cq-kind-tabs" role="tablist">
+          <button type="button" class="cq-kind active" data-kind="quiz" onclick="switchCqKind('quiz')">选择题</button>
+          <button type="button" class="cq-kind" data-kind="riddle" onclick="switchCqKind('riddle')">猜谜题</button>
         </div>
-        <div id="cq-riddle-fields" hidden>
-          <div class="cq-row"><label>谜底分类</label><select id="cq-rtype"><option value="gu">蛊虫</option><option value="person">人物</option><option value="item">物品</option></select></div>
-          <div class="cq-row"><label>谜底名称</label><input id="cq-rname" placeholder="例如：春秋蝉"></div>
-          <div class="cq-row"><label>提示</label><textarea id="cq-rhints" rows="5" placeholder="每条提示一行，建议 5~10 条：&#10;它是八转蛊虫&#10;它是仙蛊&#10;使用者是方源&#10;……"></textarea></div>
+        <div id="cq-quiz-fields" class="cq-fields">
+          <div class="cq-field"><label>分类</label><select id="cq-type"><option value="gu">蛊虫题</option><option value="person">人物题</option><option value="type">蛊虫类型题</option></select></div>
+          <div class="cq-field"><label>题目</label><textarea id="cq-q" rows="2" placeholder="输入题目内容"></textarea></div>
+          <div class="cq-field"><label>选项</label>
+            <div class="cq-options">
+              <label class="cq-option"><span>A</span><input id="cq-o0" placeholder="选项内容"></label>
+              <label class="cq-option"><span>B</span><input id="cq-o1" placeholder="选项内容"></label>
+              <label class="cq-option"><span>C</span><input id="cq-o2" placeholder="选项内容"></label>
+              <label class="cq-option"><span>D</span><input id="cq-o3" placeholder="选项内容"></label>
+            </div>
+          </div>
+          <div class="cq-field-row">
+            <div class="cq-field"><label>正确答案</label><select id="cq-ans"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>
+            <div class="cq-field"><label>解析（可选）</label><input id="cq-exp" placeholder="答案解析"></div>
+          </div>
         </div>
-        <div class="cq-actions"><button class="btn btn-primary" onclick="addCustomQuestion()">添加</button></div>
+        <div id="cq-riddle-fields" class="cq-fields" hidden>
+          <div class="cq-field-row">
+            <div class="cq-field"><label>谜底分类</label><select id="cq-rtype"><option value="gu">蛊虫</option><option value="person">人物</option><option value="item">物品</option></select></div>
+            <div class="cq-field"><label>谜底名称</label><input id="cq-rname" placeholder="例如：春秋蝉"></div>
+          </div>
+          <div class="cq-field"><label>提示</label><textarea id="cq-rhints" rows="6" placeholder="每条提示一行，建议 5~10 条：&#10;它是八转蛊虫&#10;它是仙蛊&#10;使用者是方源&#10;……"></textarea></div>
+        </div>
+        <div class="cq-submit"><button class="btn btn-primary" onclick="addCustomQuestion()">添加到题库</button></div>
       </div>
-      <div class="cq-list-head"><span>我的题目（<span id="cq-count">0</span>）</span></div>
-      <div id="cq-list"></div>
-      <div class="cq-list-head"><span>批量导入（粘贴 AI 生成的 JSON）</span></div>
-      <textarea id="cq-import" rows="14" placeholder='[{"kind":"quiz","type":"gu","q":"...","options":["A","B","C","D"],"answer":0,"explain":"..."}, {"kind":"riddle","type":"gu","name":"春秋蝉","hints":["...","...","..."]}]'></textarea>
-      <div class="cq-actions"><button class="btn btn-primary" onclick="importCustomQuiz()">导入 JSON</button></div>
+      <div class="cq-section">
+        <div class="cq-section-title"><span class="cq-step">2</span>我的题目<span class="cq-count">（<span id="cq-count">0</span>）</span></div>
+        <div id="cq-list"></div>
+      </div>
+      <div class="cq-section">
+        <div class="cq-section-title"><span class="cq-step">3</span>批量导入<span class="cq-count">（粘贴 AI 生成的 JSON 数组）</span></div>
+        <textarea id="cq-import" rows="8" placeholder='[{"kind":"quiz","type":"gu","q":"...","options":["A","B","C","D"],"answer":0,"explain":"..."}, {"kind":"riddle","type":"gu","name":"春秋蝉","hints":["...","...","..."]}]'></textarea>
+        <div class="cq-submit"><button class="btn btn-ghost" onclick="importCustomQuiz()">导入 JSON</button></div>
+      </div>
     </div>
   </div>
 </div>

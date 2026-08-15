@@ -186,3 +186,35 @@ input, select, textarea{ font-size:14.5px; }
 .game-toolbar{ display:flex; align-items:center; gap:10px; justify-content:flex-end; padding:10px clamp(14px,2.3vw,30px) 0; }
 .game-toolbar-title{ margin-right:auto; color:var(--muted); font-size:12.5px; letter-spacing:1px; }
 .game-toolbar .btn{ min-height:34px; padding:6px 14px; font-size:13.5px; }
+/* ---- 自定义题库（新版） ---- */
+.cq-modal{ max-width:880px; }
+.cq-body{ padding:20px 24px 26px; }
+.cq-section{ padding-bottom:20px; margin-bottom:20px; border-bottom:1px dashed var(--line); }
+.cq-section:last-child{ border-bottom:0; margin-bottom:0; padding-bottom:4px; }
+.cq-section-title{ display:flex; align-items:center; gap:9px; margin-bottom:14px; font-size:15px; font-weight:700; letter-spacing:1px; }
+.cq-step{ display:inline-flex; width:22px; height:22px; flex:none; align-items:center; justify-content:center; border-radius:50%; background:var(--accent); color:#fff; font-size:12px; }
+.cq-count{ color:var(--muted); font-size:12.5px; font-weight:400; letter-spacing:0; }
+.cq-kind-tabs{ display:inline-flex; margin-bottom:16px; border:1px solid var(--line); border-radius:4px; overflow:hidden; }
+.cq-kind{ padding:8px 22px; border:0; background:#fff; color:#555; cursor:pointer; font-size:13.5px; font-family:"Songti SC","SimSun",serif; }
+.cq-kind.active{ background:var(--ink); color:#fff; }
+.cq-fields{ display:flex; flex-direction:column; gap:11px; }
+.cq-field{ display:grid; grid-template-columns:92px minmax(0,1fr); gap:12px; align-items:start; }
+.cq-field label{ padding-top:9px; font-size:13.5px; font-weight:700; color:var(--ink); }
+.cq-field-row{ display:grid; grid-template-columns:170px minmax(0,1fr); gap:12px; }
+.cq-field-row .cq-field{ grid-template-columns:92px minmax(0,1fr); }
+.cq-options{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+.cq-option{ display:flex; align-items:center; gap:8px; padding:6px 10px; border:1px solid var(--line); border-radius:4px; background:#fff; }
+.cq-option span{ flex:none; width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:50%; font-size:11px; color:var(--muted); }
+.cq-option input{ flex:1; min-width:0; border:0!important; background:none!important; padding:4px 0!important; font-size:13.5px!important; height:auto!important; min-height:auto!important; }
+.cq-option input:focus{ box-shadow:none!important; }
+.cq-submit{ margin-top:14px; text-align:right; }
+.cq-item{ padding:11px 13px; margin-bottom:9px; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:4px; background:#fff; }
+.cq-item-head{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+.cq-item-head b{ font-size:14px; line-height:1.6; font-weight:700; }
+.cq-del{ flex:none; border:1px solid var(--line); background:none; color:var(--accent); cursor:pointer; padding:2px 10px; border-radius:3px; font-size:12.5px; }
+.cq-del:hover{ background:#FAEDE9; }
+.cq-item-opts{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.cq-item-opts span{ padding:2px 9px; border:1px solid var(--line); border-radius:3px; font-size:12.5px; color:#555; }
+.cq-item-opts span.cq-right{ background:#F2F2EF; border-color:var(--accent); color:var(--accent); font-weight:700; }
+.cq-empty{ padding:14px 0; color:var(--muted); font-size:13.5px; text-align:center; }
+#cq-import{ width:100%; min-height:132px; font-family:Consolas,Monaco,monospace; font-size:12.5px; }

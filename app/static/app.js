@@ -904,13 +904,15 @@ function deleteCustomQuestion(i){
   var box = $('cq-count'); if (box) box.textContent = list.length;
   renderCustomQuizList(); toast('已删除该题目');
 }
-function toggleCqKind(){
-  var kind = $('cq-kind').value;
-  $('cq-quiz-fields').hidden = kind !== 'quiz';
-  $('cq-riddle-fields').hidden = kind !== 'riddle';
+var CQ_KIND = 'quiz';
+function switchCqKind(k){
+  CQ_KIND = k;
+  document.querySelectorAll('.cq-kind').forEach(function(b){ b.classList.toggle('active', b.dataset.kind === k); });
+  $('cq-quiz-fields').hidden = k !== 'quiz';
+  $('cq-riddle-fields').hidden = k !== 'riddle';
 }
 function addCustomQuestion(){
-  var kind = $('cq-kind').value;
+  var kind = CQ_KIND;
   var list = customQuiz();
   if (kind === 'riddle'){
     var name = ($('cq-rname').value || '').trim();
