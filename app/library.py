@@ -101,6 +101,62 @@ def chapter_text(vol: str, chapter: int):
     }
 
 
+_pdf_toc_cache = None
+
+
+def pdf_toc():
+    """提取所有 PDF 的书签目录，带磁盘缓存。返回 {文件名: [{title, page, depth}]}"""
+    global _pdf_toc_cache
+    if _pdf_toc_cache is not None:
+        return _pdf_toc_cache
+    import json as _json
+    from app.config import BASE as _BASE
+    cache = _BASE / "data" / "pdf_toc_cache.json"
+    if cache.is_file():
+        try:
+            _pdf_toc_cache = _json.loads(cache.read_text(encoding="utf-8"))
+            return _pdf_toc_cache
+        except Exception:
+            pass
+    from pypdf import PdfReader
+    out = {}
+    for gdir in sorted(os.listdir(PDF_ROOT)):
+        gp = PDF_ROOT / gdir
+        if not gp.is_dir():
+            continue
+        for fn in sorted(os.listdir(gp)):
+            if not fn.lower().endswith(".pdf"):
+                continue
+            path = gp / fn
+            try:
+                r = PdfReader(str(path))
+                items = []
+                def walk(lst, depth):
+                    for it in lst:
+                        if isinstance(it, list):
+                            walk(it, depth + 1)
+                            continue
+                        title = str(it.title or "").strip()
+                        page = None
+                        try:
+                            page = int(r.get_destination_page_number(it)) + 1
+                        except Exception:
+                            page = None
+                        if title:
+                            items.append({"title": title, "page": page, "depth": depth})
+                walk(r.outline or [], 0)
+                if items:
+                    out[fn] = items
+            except Exception as e:
+                print(f"[pdf_toc] 解析失败 {fn}: {str(e)[:60]}")
+    _pdf_toc_cache = out
+    try:
+        cache.write_text(_json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+    return out
+
+
 def pdf_files():
     """返回 [{group, name, path, url}]"""
     out = []

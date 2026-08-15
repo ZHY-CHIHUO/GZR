@@ -795,24 +795,57 @@ function stepChapter(delta){
   if (next) showChapter(CUR_VOL, next.n);
   else toast(delta>0 ? '已是本卷最后一章' : '已是本卷第一章');
 }
+function renderPdfList(pdf, pane){
+  var toc = pdf.toc || [];
+  var list = pane.querySelector('.pdf-list');
+  if (!toc.length){
+    return '<div class="toc-leaf"><span class="toc-dot"></span><span class="toc-link" data-url="'+pdf.url+'" data-page="1" onclick="openPdf(this, \''+pdf.url+'\')">'+esc(pdf.name)+'</span></div>';
+  }
+  // 书签转树（depth 层级）
+  var tree = [], stack = [{depth: -1, children: tree}];
+  toc.forEach(function(it){
+    var node = {title: it.title, page: it.page, depth: it.depth, children: []};
+    while (stack.length > 1 && stack[stack.length - 1].depth >= it.depth) stack.pop();
+    stack[stack.length - 1].children.push(node);
+    stack.push(node);
+  });
+  function renderNode(n, pdf){
+    if (n.children.length){
+      return '<details class="toc-node"><summary><span class="toc-link">'+esc(n.title)+'</span></summary>' +
+        '<div class="toc-children">' + n.children.map(function(c){ return renderNode(c, pdf); }).join('') + '</div></details>';
+    }
+    var page = n.page || 1;
+    return '<div class="toc-leaf"><span class="toc-dot"></span>' +
+      '<span class="toc-link" data-url="'+pdf.url+'" data-page="'+page+'" onclick="openPdf(this)">'+esc(n.title)+'</span></div>';
+  }
+  return tree.map(function(n){ return renderNode(n, pdf); }).join('');
+}
+function openPdf(el){
+  var url = el.getAttribute('data-url');
+  var page = el.getAttribute('data-page') || '1';
+  var pane = el.closest('.read-pane') || document.getElementById('read-pdf');
+  var view = pane.querySelector('.pdf-view');
+  pane.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); });
+  el.classList.add('cur');
+  var title = el.textContent;
+  view.innerHTML =
+    '<div style="padding:8px 10px;border-bottom:1px solid #e5e0d6;font-size:13px">📄 '+esc(title)+
+    '（第 '+page+' 页） <a class="dl-btn" style="margin-left:10px;padding:3px 10px" href="'+url+'" target="_blank">↗ 新标签页打开</a></div>' +
+    '<iframe src="'+url+'?_t='+Date.now()+'#page='+page+'"></iframe>';
+}
 function renderPdfLists(pdfs){
-  // 插图版按原版卷名分组（对照原文章节）；人祖传独立
   var volOrder = [];
-  var volNames = {};
-  (LIB.volumes || []).forEach(function(v){ volOrder.push(v.name); volNames[v.name] = []; });
+  (LIB.volumes || []).forEach(function(v){ volOrder.push(v.name); });
   var groups = { '合订本': [], '人祖传': [] };
   pdfs.forEach(function(p){
     if (p.group === '人祖传'){ groups['人祖传'].push(p); return; }
     var m = p.name.match(/第([一二三四五六七八九十]+)卷/);
-    var key = null;
-    if (m){
-      key = volOrder.find(function(k){ return k.indexOf('第' + m[1] + '卷') === 0; });
-    }
+    var key = m ? volOrder.find(function(k){ return k.indexOf('第' + m[1] + '卷') === 0; }) : null;
     if (key){ groups[key] = groups[key] || []; groups[key].push(p); }
     else { groups['合订本'].push(p); }
   });
   var pane = $('read-pdf');
-  pane.innerHTML = '<div class="pdf-list"></div><div class="pdf-view"><div class="empty">选择左侧 PDF 查看</div></div>';
+  pane.innerHTML = '<div class="pdf-list"></div><div class="pdf-view"><div class="empty">选择左侧章节查看</div></div>';
   var list = pane.querySelector('.pdf-list');
   var order = ['合订本'].concat(volOrder);
   order.forEach(function(g){
@@ -823,39 +856,32 @@ function renderPdfLists(pdfs){
     var sum = document.createElement('summary');
     var s = document.createElement('span');
     s.className = 'toc-link';
-    s.textContent = g + '（' + arr.length + '）';
+    s.textContent = g + '（' + (arr[0].toc && arr[0].toc.length ? arr[0].toc.length + ' 节' : arr.length) + '）';
     sum.appendChild(s);
     det.appendChild(sum);
     var children = document.createElement('div');
     children.className = 'toc-children';
     arr.forEach(function(p){
-      var it = document.createElement('div');
-      it.className = 'toc-leaf';
-      var dot = document.createElement('span'); dot.className = 'toc-dot';
-      var link = document.createElement('span');
-      link.className = 'toc-link';
-      link.textContent = p.name.replace('蛊无删减插图版', '').replace(/（1\.\d版）/, '').trim();
-      link.onclick = function(){
-        list.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); });
-        link.classList.add('cur');
-        pane.querySelector('.pdf-view').innerHTML =
-          '<div style="padding:8px 10px;border-bottom:1px solid #e5e0d6;font-size:13px">📄 '+esc(p.name)+
-          ' <a class="dl-btn" style="margin-left:10px;padding:3px 10px" href="'+p.url+'" target="_blank">↗ 新标签页打开</a></div>' +
-          '<iframe src="'+p.url+'?_t='+Date.now()+'"></iframe>';
-      };
-      it.appendChild(dot); it.appendChild(link);
-      children.appendChild(it);
+      var wrap = document.createElement('div');
+      wrap.innerHTML = renderPdfList(p, pane);
+      while (wrap.firstChild) children.appendChild(wrap.firstChild);
     });
     det.appendChild(children);
     list.appendChild(det);
   });
   if (!list.children.length) list.innerHTML = '<div class="empty">未找到 PDF</div>';
-  // 人祖传独立 pane
+  // 人祖传：目录树导航
   var rz = $('read-rz');
   var rzPdf = (groups['人祖传']||[])[0];
-  rz.innerHTML = rzPdf
-    ? '<div class="pdf-view" style="flex:1"><iframe src="'+rzPdf.url+'?_t='+Date.now()+'"></iframe></div>'
-    : '<div class="empty">未找到人祖传 PDF</div>';
+  if (rzPdf){
+    rz.innerHTML = '<div class="pdf-list" style="width:260px"></div><div class="pdf-view"><div class="empty">选择左侧章节查看</div></div>';
+    var rzList = rz.querySelector('.pdf-list');
+    var w = document.createElement('div');
+    w.innerHTML = renderPdfList(rzPdf, rz);
+    while (w.firstChild) rzList.appendChild(w.firstChild);
+  } else {
+    rz.innerHTML = '<div class="empty">未找到人祖传 PDF</div>';
+  }
   pane.dataset.loaded = '1';
 }
 

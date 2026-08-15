@@ -288,9 +288,13 @@ def riddle_pick(req: RiddleReq):
 
 @app.get("/api/library")
 def get_library():
+    tocs = library.pdf_toc()
+    pdfs = library.pdf_files()
+    for p in pdfs:
+        p["toc"] = tocs.get(p["name"], [])
     return {
         "volumes": library.novel_volumes(),
-        "pdfs": library.pdf_files(),
+        "pdfs": pdfs,
         "lore": {
             "name": LORE_NAME,
             "html_url": "/api/lore/html",
