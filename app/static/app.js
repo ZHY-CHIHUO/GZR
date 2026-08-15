@@ -346,7 +346,7 @@ function loadLibrary(){
       var sum = document.createElement('summary');
       var s = document.createElement('span');
       s.className = 'toc-link';
-      s.textContent = v.name + '（' + chapters.length + ' 章）';
+      s.textContent = v.name;
       sum.appendChild(s);
       det.appendChild(sum);
       var list = document.createElement('div');
@@ -928,6 +928,31 @@ function clearQuizHistory(){
   localStorage.removeItem('gzr.quizHistory');
   renderQuizHistory();
 }
+function openGameHistory(){
+  var body = $('game-history-body'); if (!body) return;
+  var qh = quizHistory(), rh = riddleHistory();
+  var labels = {mix:'混合', gu:'蛊虫', person:'人物', type:'蛊虫类型'};
+  var rlabels = {gu:'蛊虫', person:'人物', item:'物品'};
+  var h = '<div class="gh-sec"><h4>选择题记录</h4>';
+  if (!qh.length) h += '<div class="gh-empty">暂无记录，完成一组选择题后自动保存。</div>';
+  else h += qh.map(function(r){
+    return '<div class="gh-row"><span>'+esc(r.d)+'</span><span>'+esc(labels[r.type]||r.type)+' · '+r.n+' 题</span><b>'+r.right+' / '+r.n+'</b><span>'+fmtTime(r.sec)+'</span></div>';
+  }).join('');
+  h += '</div><div class="gh-sec"><h4>猜谜记录</h4>';
+  if (!rh.length) h += '<div class="gh-empty">暂无记录，猜完一道谜题后自动保存。</div>';
+  else h += rh.map(function(r){
+    return '<div class="gh-row"><span>'+esc(r.d)+'</span><span>猜'+esc(rlabels[r.type]||r.type)+' · '+esc(r.name)+'</span><b class="'+(r.result==='对'?'gh-ok':'gh-bad')+'">'+esc(r.result)+(r.pts?' (+'+r.pts+')':'')+'</b><span></span></div>';
+  }).join('');
+  h += '</div><div class="gh-clear"><button class="btn btn-ghost" onclick="clearGameHistory()">清空全部记录</button></div>';
+  body.innerHTML = h;
+  $('game-history-modal').classList.add('show');
+}
+function clearGameHistory(){
+  localStorage.removeItem('gzr.quizHistory');
+  localStorage.removeItem('gzr.riddleHistory');
+  toast('已清空游戏历史记录');
+  openGameHistory();
+}
 
 /* ---------- 游戏：猜谜 ---------- */
 var RIDDLE = null, RIDDLE_IDX = 0, RIDDLE_TYPE = 'gu', RIDDLE_LABEL = '猜蛊虫';
@@ -941,15 +966,32 @@ async function newRiddle(){
     renderRiddle();
   } catch(e){ $('riddle-body').innerHTML = '<div class="empty">出题失败：'+esc(e.message)+'</div>'; }
 }
+function riddleHistory(){ try { return JSON.parse(localStorage.getItem('gzr.riddleHistory') || '[]'); } catch(e){ return []; } }
+function recordRiddle(ok, pts){
+  var h = riddleHistory();
+  h.unshift({d: new Date().toLocaleString('zh-CN', {hour12:false}), type: RIDDLE_TYPE, name: RIDDLE.name, result: ok ? '对' : '错', pts: pts});
+  if (h.length > 40) h.length = 40;
+  try { localStorage.setItem('gzr.riddleHistory', JSON.stringify(h)); } catch(e){}
+}
 function renderRiddle(){
   var html = '<div class="riddle-hints">';
   for (var i=0; i<=RIDDLE_IDX; i++) html += '<div class="riddle-hint">提示'+(i+1)+'：'+esc(RIDDLE.hints[i])+'</div>';
   html += '</div>';
   if (RIDDLE_IDX < 2) html += '<br><button class="btn btn-ghost" onclick="moreHint()">更多提示（-1分）</button>';
   html += '<div class="riddle-ask"><input id="riddle-input" placeholder="输入你的答案…" autocomplete="off"><button class="btn btn-primary" onclick="guessRiddle()">猜！</button></div>';
+  if (RIDDLE.options && RIDDLE.options.length){
+    html += '<div class="riddle-opts">';
+    RIDDLE.options.forEach(function(o, i){ html += '<button class="quiz-opt" onclick="guessRiddleOpt('+i+')">'+esc(o)+'</button>'; });
+    html += '</div>';
+  }
   html += '<div id="riddle-fb"></div>';
   $('riddle-body').innerHTML = html;
   var inp = $('riddle-input'); if (inp) { inp.focus(); inp.addEventListener('keydown', function(e){ if (e.key==='Enter') guessRiddle(); }); }
+}
+function guessRiddleOpt(i){
+  if (!RIDDLE.options || !RIDDLE.options[i]) return;
+  $('riddle-input').value = RIDDLE.options[i];
+  guessRiddle();
 }
 function moreHint(){
   if (RIDDLE_IDX >= 2) return;
@@ -968,8 +1010,10 @@ function guessRiddle(){
     var pts = [3,2,1][RIDDLE_IDX] || 1;
     localStorage.setItem('gzr.riddleScore', riddleScore() + pts);
     updateRiddleScore();
+    recordRiddle(true, pts);
     fb.innerHTML = '猜对了！+'+pts+'分　答案：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
   } else if (RIDDLE_IDX >= 2){
+    recordRiddle(false, 0);
     fb.innerHTML = '没猜中，答案是：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
   } else {
     fb.innerHTML = '不对，再想想（可用「更多提示」）';

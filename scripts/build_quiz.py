@@ -81,17 +81,65 @@ def main():
             break
 
     # ---- 猜谜池 ----
-    def riddle_pool(items, limit=400):
+    def rank_hint(e):
+        """从原文可见的信息提炼第一句提示：转数 / 仙蛊 / 仙蛊屋 / 杀招 / 灾劫 / 势力 / 秘境。"""
+        sub = e.get("sub", "") or ""
+        d = e.get("desc", "") or ""
+        sec = e.get("section", "") or ""
+        m = re.search(r"([一二三四五六七八九十]+)转", sub)
+        if m:
+            return f"它是{m.group(1)}转蛊虫"
+        if sub == "仙蛊":
+            return "它是一只仙蛊"
+        if "仙蛊屋" in sec or "蛊屋" in d:
+            return "它是一座仙蛊屋"
+        if "杀招" in sec or "杀招" in d[:20]:
+            return "它是一种杀招"
+        if "灾劫" in sec:
+            return "它是一种灾劫"
+        if "势力" in sec or "家族" in d or "天庭" in sec:
+            return "它是一个势力或组织"
+        if "天地秘境" in sec or "洞天" in d:
+            return "它是一处天地秘境"
+        if "境界" in sec or "流派" in sec:
+            return "它是一种修行境界或流派"
+        if "人祖" in sec:
+            return "它出自人祖传的寓言故事"
+        return None
+
+    def riddle_pool(items, kind, limit=400):
         pool = []
+        names = [e["name"] for e in items if len(e.get("desc", "")) >= 15]
         for e in items:
             d = e["desc"]
             if len(d) < 15:
                 continue
+            if kind == "gu":
+                h = rank_hint(e)
+                first = h if h else "它是《蛊真人》中的一种蛊虫"
+            elif kind == "person":
+                first = []
+                if "尊者" in d:
+                    first.append("它在书中是尊者级人物")
+                elif "蛊仙" in d:
+                    first.append("它是蛊仙")
+                if "魔道" in d:
+                    first.append("它出身魔道阵营")
+                elif "正道" in d:
+                    first.append("它出身正道阵营")
+                first = first[0] if first else "它是《蛊真人》中的人物"
+            else:
+                h = rank_hint(e)
+                first = h if h else "它是《蛊真人》中的一个重要事物"
+            dist = random.sample([n for n in names if n != e["name"]], 3)
+            opts = [e["name"]] + dist
+            random.shuffle(opts)
             pool.append({
                 "name": e["name"],
+                "options": opts,
                 "hints": [
-                    f"它出自设定集《{e['section']}》",
-                    f"线索：{d[:34]}……",
+                    first,
+                    f"线索：{d[:40]}……",
                     f"它的名字共 {len(e['name'])} 个字，首字是「{e['name'][0]}」",
                 ],
             })
@@ -99,10 +147,15 @@ def main():
                 break
         return pool
 
+    item_src = (
+        wiki.get("仙蛊屋", []) + wiki.get("灾劫", []) + wiki.get("杀招", [])
+        + wiki.get("势力", []) + wiki.get("天地秘境", []) + wiki.get("五域地理", [])
+        + wiki.get("世界设定", [])
+    )
     riddles = {
-        "gu": riddle_pool(gu),
-        "person": riddle_pool(ppl),
-        "item": riddle_pool(wiki.get("仙蛊屋", []) + wiki.get("灾劫", []) + wiki.get("杀招", []) + wiki.get("势力", [])),
+        "gu": riddle_pool(gu, "gu"),
+        "person": riddle_pool(ppl, "person"),
+        "item": riddle_pool(item_src, "item"),
     }
 
     out = {"quiz": quiz, "riddles": riddles}

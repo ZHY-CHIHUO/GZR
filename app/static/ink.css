@@ -140,3 +140,18 @@ input, select, textarea{ font-size:14.5px; }
 .quiz-history-item{ display:grid; grid-template-columns:1fr auto auto auto; gap:14px; align-items:center; padding:8px 14px; border-bottom:1px solid #EFEFEF; font-size:14px; }
 .quiz-history-item b{ color:var(--accent); }
 .quiz-history-empty{ padding:14px; color:var(--muted); font-size:13.5px; text-align:center; }
+/* ---- 游戏适配屏幕与历史记录 ---- */
+#tab-game{ overflow:hidden; }
+.game-wrap{ overflow:hidden; }
+.game-pane{ min-height:0; }
+.game-body{ overflow-y:auto; }
+.riddle-opts{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+.riddle-opts .quiz-opt{ margin:0; min-height:42px; }
+.gh-sec{ margin-bottom:18px; }
+.gh-sec h4{ margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid var(--line); font-size:15px; letter-spacing:1px; }
+.gh-row{ display:grid; grid-template-columns:1fr auto auto auto; gap:14px; align-items:center; padding:8px 4px; border-bottom:1px solid #EFEFEF; font-size:14px; }
+.gh-row b{ color:var(--accent); }
+.gh-row .gh-bad{ color:#999; }
+.gh-empty{ padding:8px 0; color:var(--muted); font-size:13.5px; }
+.gh-clear{ text-align:right; margin-top:10px; }
+#game-history-btn{ white-space:nowrap; }

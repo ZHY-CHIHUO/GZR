@@ -153,6 +153,7 @@
           <button class="btn btn-primary" onclick="startQuiz()">开始答题</button>
           <span id="quiz-timer" class="game-timer" title="本组用时">00:00</span>
           <span id="quiz-score" class="game-score">累计 0/0</span>
+          <button class="btn btn-ghost" id="game-history-btn" onclick="openGameHistory()">历史记录</button>
         </div>
         <div id="quiz-body" class="game-body"><div class="empty">点击「开始答题」挑战你的蛊真人知识！</div></div>
         <div class="quiz-history" id="quiz-history">
@@ -207,6 +208,14 @@
     </div>
   </section>
 </main>
+
+<!-- 游戏历史记录弹窗 -->
+<div class="modal-bg" id="game-history-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h2>游戏历史记录</h2><button class="modal-x" onclick="closeModal('game-history-modal')">×</button></div>
+    <div class="modal-body" id="game-history-body"></div>
+  </div>
+</div>
 
 <!-- 教程弹窗 -->
 <div class="modal-bg" id="tutorial-modal">
