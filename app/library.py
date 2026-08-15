@@ -101,6 +101,28 @@ def chapter_text(vol: str, chapter: int):
     }
 
 
+_CN_DIGIT = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+
+
+def _cn_to_int(s):
+    """汉字数字 -> 整数（支持 十/百/千，如 一百零一 -> 101）。"""
+    s = s.replace("零", "")
+    total, cur = 0, 0
+    for c in s:
+        if c in _CN_DIGIT:
+            cur = _CN_DIGIT[c]
+        elif c == "十":
+            total += (cur or 1) * 10
+            cur = 0
+        elif c == "百":
+            total += (cur or 1) * 100
+            cur = 0
+        elif c == "千":
+            total += (cur or 1) * 1000
+            cur = 0
+    return total + cur
+
+
 _pdf_toc_cache = None
 
 
@@ -137,7 +159,8 @@ def _combined_flat_toc():
         elif t in vol_words or re.match(r"^第[零一二三四五六七八九十两]+卷", t):
             continue  # 跳过纯卷名/残缺卷级书签
         elif t.startswith("番外"):
-            extras.append((t, pg))
+            t2 = re.sub(r"^(番外篇第[零一二三四五六七八九十百千两]+章)(.*)$", r"\1 · \2", t)
+            extras.append((t2, pg))
         else:
             front.append((t, pg))
     out = []
@@ -172,8 +195,14 @@ def _normalize_toc(fn, items):
         return [it for it in items if re.match(r"^人祖传（[零一二三四五六七八九十两]+）——", it["title"])]
     if "1.1" in fn:
         return _combined_flat_toc()
-    # 分卷 PDF：只保留 第X节 章节标题
-    return [it for it in items if re.match(r"^第[零一二三四五六七八九十百千两]+节", it["title"])]
+    # 分卷 PDF：只保留 第X节，并统一为 第N章 · 标题
+    out = []
+    for it in items:
+        m = re.match(r"^第([零一二三四五六七八九十百千两]+)节[：:]\s*(.*)$", it["title"])
+        if m:
+            n = _cn_to_int(m.group(1))
+            out.append(dict(it, title=f"第{n}章 · {m.group(2).strip()}", depth=0))
+    return out
 
 
 def pdf_toc():

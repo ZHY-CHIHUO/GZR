@@ -614,16 +614,12 @@ function renderSources(sources){
   if (!sources || !sources.length) return '';
   var html = '';
   sources.forEach(function(s){
-    var ex = (s.excerpt||'').trim();
-    var exHint = ex ? attrEsc(ex.slice(0,24)) : '';
-    html += '<div class="src-card" data-n="'+sources.indexOf(s)+'">' +
+    html += '<div class="src-card">' +
       '<div class="src-head"><span class="src-label">'+esc(s.label)+'</span>' +
       (s.type==='lore'
         ? '<button class="src-btn" data-act="lore-read" data-sec="'+attrEsc(s.title||s.section||'')+'">📖 阅读原文</button>'
-        : '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'" data-ex="'+exHint+'">📖 阅读原文</button>') +
-      (s.type==='novel' ? '<button class="src-btn" data-act="locate" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">📂 打开本地文件</button>' : '') +
-      (ex ? '<button class="src-btn" data-act="toggle">🔍 展开片段</button>' : '') +
-      '</div>' + (ex ? '<div class="src-excerpt">'+esc(ex)+'</div>' : '') + '</div>';
+        : '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">📖 阅读原文</button>') +
+      '</div></div>';
   });
   return html;
 }
@@ -676,22 +672,34 @@ $('chat').addEventListener('click', function(ev){
   }
   var btn = el.closest ? el.closest('.src-btn') : null;
   if (!btn) return;
-  var card = btn.closest('.src-card');
-  if (btn.dataset.act === 'toggle'){ if (card) card.classList.toggle('open'); }
-  else if (btn.dataset.act === 'read'){
-    var ex = btn.dataset.ex || '';
-    var fullEx = '';
-    if (card){ var se = card.querySelector('.src-excerpt'); if (se) fullEx = se.textContent; }
-    readChapter(btn.dataset.vol, parseInt(btn.dataset.ch, 10), fullEx || ex);
-  }
-  else if (btn.dataset.act === 'locate'){
-    locateFile(btn.dataset.vol, parseInt(btn.dataset.ch, 10));
+  if (btn.dataset.act === 'read'){
+    gotoNovelChapter(btn.dataset.vol, parseInt(btn.dataset.ch, 10));
   }
   else if (btn.dataset.act === 'lore-read'){
-    readLore(btn.dataset.sec);
+    gotoLoreSection(btn.dataset.sec);
   }
 });
 
+/* ---------- 来源 → 跳转阅读模块 ---------- */
+function switchReadTab(rt){
+  document.querySelectorAll('.rtab[data-rt]').forEach(function(b){ b.classList.toggle('active', b.dataset.rt === rt); });
+  ['novel','pdf','rz','lore'].forEach(function(t){ $('read-'+t).hidden = (t !== rt); });
+}
+function gotoNovelChapter(vol, ch){
+  switchTab('read');
+  switchReadTab('novel');
+  var go = function(){ showChapter(vol, ch); };
+  if (!LIB){ loadLibrary().then(go); } else { go(); }
+}
+function gotoLoreSection(section){
+  switchTab('read');
+  switchReadTab('lore');
+  loadLore().then(function(){
+    var found = null;
+    (LORE_DATA.toc || []).forEach(function(t){ if (!found && t.text === section) found = t; });
+    if (found){ setTimeout(function(){ scrollToLore(found.anchor); }, 350); }
+  });
+}
 /* ---------- 来源 → 定位原文 ---------- */
 async function readChapter(vol, ch, excerptHint){
   try {
@@ -867,7 +875,7 @@ async function renderPdfPage(url, page){
   try {
     var doc = await entry.promise;
     var p = await doc.getPage(page);
-    var viewport = p.getViewport({scale: 1.5});
+    var viewport = p.getViewport({scale: 2.5});
     var dpr = window.devicePixelRatio || 1;
     canvas.width = Math.floor(viewport.width * dpr);
     canvas.height = Math.floor(viewport.height * dpr);
@@ -877,6 +885,7 @@ async function renderPdfPage(url, page){
     var transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null;
     await p.render({canvasContext: ctx, viewport: viewport, transform: transform}).promise;
     if (pageEl) pageEl.textContent = '第 ' + page + ' / ' + doc.numPages + ' 页';
+    if (canvas.parentElement) canvas.parentElement.scrollTop = 0;
   } catch(e){
     canvas.parentElement.innerHTML = '<div class="empty">PDF 加载失败：'+esc(e.message)+'</div>';
   }
