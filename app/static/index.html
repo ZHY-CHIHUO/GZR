@@ -828,10 +828,11 @@ function openPdf(el){
   pane.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); });
   el.classList.add('cur');
   var title = el.textContent;
+  // 同 PDF 内跳页：只改 #page fragment，浏览器复用已加载 PDF，秒切
   view.innerHTML =
     '<div style="padding:8px 10px;border-bottom:1px solid #e5e0d6;font-size:13px">📄 '+esc(title)+
-    '（第 '+page+' 页） <a class="dl-btn" style="margin-left:10px;padding:3px 10px" href="'+url+'" target="_blank">↗ 新标签页打开</a></div>' +
-    '<iframe src="'+url+'?_t='+Date.now()+'#page='+page+'"></iframe>';
+    '（第 '+page+' 页） <a class="dl-btn" style="margin-left:10px;padding:3px 10px" href="'+url+'#page='+page+'" target="_blank">↗ 新标签页打开</a></div>' +
+    '<iframe src="'+url+'#page='+page+'"></iframe>';
 }
 function renderPdfLists(pdfs){
   var volOrder = [];

@@ -104,6 +104,26 @@ def chapter_text(vol: str, chapter: int):
 _pdf_toc_cache = None
 
 
+def _normalize_toc(fn, items):
+    """按标题模式重建/过滤书签层级：
+    - 人祖传：只保留「人祖传（N）——」章标题
+    - 合订本(1.1)：序/第X卷 = 一级(depth0)，第X节 = 二级(depth1)
+    """
+    if "人祖传" in fn:
+        return [it for it in items if re.match(r"^人祖传（[一二三四五六七八九十]+）——", it["title"])]
+    if "1.1" in fn:
+        out = []
+        for it in items:
+            t = it["title"]
+            if re.match(r"^第[一二三四五六七八九十]+卷", t) or t.startswith("序"):
+                out.append(dict(it, depth=0))
+            elif re.match(r"^第[一二三四五六七八九十百千]+节", t):
+                out.append(dict(it, depth=1))
+        return out
+    # 分卷 PDF：只保留 第X节 章节标题
+    return [it for it in items if re.match(r"^第[一二三四五六七八九十百千]+节", it["title"])]
+
+
 def pdf_toc():
     """提取所有 PDF 的书签目录，带磁盘缓存。返回 {文件名: [{title, page, depth}]}"""
     global _pdf_toc_cache
@@ -146,7 +166,7 @@ def pdf_toc():
                             items.append({"title": title, "page": page, "depth": depth})
                 walk(r.outline or [], 0)
                 if items:
-                    out[fn] = items
+                    out[fn] = _normalize_toc(fn, items)
             except Exception as e:
                 print(f"[pdf_toc] 解析失败 {fn}: {str(e)[:60]}")
     _pdf_toc_cache = out
