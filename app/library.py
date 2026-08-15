@@ -104,6 +104,31 @@ def chapter_text(vol: str, chapter: int):
 _CN_DIGIT = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 
 
+def _int_to_cn(n):
+    """整数 -> 汉字（1 -> 一，100 -> 一百，101 -> 一百零一）。"""
+    n = int(n)
+    if n <= 0:
+        return str(n)
+    d = "零一二三四五六七八九"
+    if n < 10:
+        return d[n]
+    if n < 20:
+        return "十" + (d[n % 10] if n % 10 else "")
+    if n < 100:
+        t, r = divmod(n, 10)
+        return d[t] + "十" + (d[r] if r else "")
+    if n < 1000:
+        h, rem = divmod(n, 100)
+        s = d[h] + "百"
+        if rem:
+            if rem < 10:
+                s += "零" + d[rem]
+            else:
+                s += _int_to_cn(rem)
+        return s
+    return str(n)
+
+
 def _cn_to_int(s):
     """汉字数字 -> 整数（支持 十/百/千，如 一百零一 -> 101）。"""
     s = s.replace("零", "")
@@ -178,7 +203,7 @@ def _combined_flat_toc():
         if items:
             out.append({"title": v["name"], "page": items[0][2], "depth": 0})
             for n, t, pg in items:
-                out.append({"title": f"第{n}章 · {t}", "page": pg, "depth": 1})
+                out.append({"title": f"第{_int_to_cn(n)}节：{t}", "page": pg, "depth": 1})
     if extras:
         out.append({"title": "番外", "page": extras[0][1], "depth": 0})
         for t, pg in extras:
@@ -200,8 +225,7 @@ def _normalize_toc(fn, items):
     for it in items:
         m = re.match(r"^第([零一二三四五六七八九十百千两]+)节[：:]\s*(.*)$", it["title"])
         if m:
-            n = _cn_to_int(m.group(1))
-            out.append(dict(it, title=f"第{n}章 · {m.group(2).strip()}", depth=0))
+            out.append(dict(it, title=f"第{m.group(1)}节：{m.group(2).strip()}", depth=0))
     return out
 
 

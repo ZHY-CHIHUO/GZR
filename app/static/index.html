@@ -143,7 +143,7 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .toc-leaf{display:flex;align-items:center;padding:3px 6px;}
 .toc-dot{display:inline-block;width:12px;text-align:center;color:#d8cfbc;font-size:8px;flex-shrink:0;}
 .toc-leaf .toc-link{font-size:12px;color:#9a9284;max-width:170px;}
-.toc-link.cur{color:var(--accent);font-weight:700;}
+.toc-link.cur{color:var(--accent);font-weight:700;background:#f0e9da;border-radius:4px;padding:0 4px;}
 .toc-leaf.lv3 .toc-link{font-size:12px;color:#9a9284;}
 .lore-dl{margin:0 0 10px;display:inline-block;}
 .dl-btn{margin-top:10px;align-self:flex-start;border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;color:var(--ink);text-decoration:none;}
@@ -858,9 +858,10 @@ function renderPdfList(pdf, chs, chsKey){
     var end = (i < leaves.length - 1) ? (leaves[i + 1].page - 1) : 999999;
     chs.push({title: n.title, url: pdf.url, start: n.page || 1, end: end});
   });
-  (function assign(n){ if (n.children.length){ n.children.forEach(assign); n.idx = n.children[0].idx; } })(stack[0]);
+  (function assign(n){ if (n.children.length){ n.children.forEach(assign); n.idx = n.children[0].idx; n.cover = (n.children[0].page || 1) - 1; } })(stack[0]);
   function renderNode(n){
-    var link = '<span class="toc-link" data-idx="'+n.idx+'" data-chs="'+chsKey+'">'+esc(n.title)+'</span>';
+    var coverAttr = (n.cover && n.children && n.children.length) ? ' data-cover="'+n.cover+'"' : '';
+    var link = '<span class="toc-link" data-idx="'+n.idx+'"'+coverAttr+' data-chs="'+chsKey+'">'+esc(n.title)+'</span>';
     if (n.children.length){
       return '<details class="toc-node"><summary>'+link+'</summary>' +
         '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></details>';
@@ -869,7 +870,7 @@ function renderPdfList(pdf, chs, chsKey){
   }
   return tree.map(renderNode).join('');
 }
-function renderChapter(idx, chsKey, pane){
+function renderChapter(idx, chsKey, pane, startOverride){
   initPdfJs();
   var chs = chsKey === 'pdf' ? PDF_CHS : RZ_CHS;
   var ch = chs[idx];
@@ -884,9 +885,10 @@ function renderChapter(idx, chsKey, pane){
   view.innerHTML = nav + '<div class="pdf-canvas-wrap"></div>' + nav;
   var wrap = view.querySelector('.pdf-canvas-wrap');
   getDoc(ch.url).then(function(doc){
+    var start = (startOverride != null) ? Math.max(1, startOverride) : ch.start;
     var end = Math.min(ch.end, doc.numPages);
     (async function(){
-      for (var p = ch.start; p <= end; p++){
+      for (var p = start; p <= end; p++){
         var c = document.createElement('canvas');
         c.className = 'pdf-page-canvas';
         wrap.appendChild(c);
@@ -956,7 +958,9 @@ function bindPdfTocClick(containerId, paneId, chsKey){
       ev.preventDefault();
       ev.stopPropagation();
       var idx = parseInt(t.getAttribute('data-idx'), 10);
-      if (!isNaN(idx)) renderChapter(idx, chsKey, document.getElementById(paneId));
+      if (isNaN(idx)) return;
+      var cover = parseInt(t.getAttribute('data-cover'), 10);
+      renderChapter(idx, chsKey, document.getElementById(paneId), isNaN(cover) ? null : cover);
     }
   });
 }
