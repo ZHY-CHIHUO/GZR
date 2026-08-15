@@ -732,7 +732,6 @@ async function loadLibrary(){
     j.volumes.forEach(function(v){
       var det = document.createElement('details');
       det.className = 'toc-node lv1';
-      det.open = true;
       var sum = document.createElement('summary');
       var s = document.createElement('span');
       s.className = 'toc-link';
@@ -799,24 +798,45 @@ function stepChapter(delta){
 function renderPdfLists(pdfs){
   var byGroup = {};
   pdfs.forEach(function(p){ (byGroup[p.group]=byGroup[p.group]||[]).push(p); });
-  // 插图版
+  // 插图版：改成可折叠目录树（默认收起）
   var pane = $('read-pdf');
   pane.innerHTML = '<div class="pdf-list"></div><div class="pdf-view"><div class="empty">选择左侧 PDF 查看</div></div>';
   var list = pane.querySelector('.pdf-list');
-  (byGroup['插图版']||[]).forEach(function(p){
-    var it = document.createElement('div'); it.className='pdf-item'; it.textContent = '🖼️ '+p.name;
-    it.onclick = function(){
-      list.querySelectorAll('.pdf-item').forEach(function(x){ x.classList.remove('active'); });
-      it.classList.add('active');
-      pane.querySelector('.pdf-view').innerHTML =
-        '<div style="padding:8px 10px;border-bottom:1px solid #e5e0d6;font-size:13px">📄 '+esc(p.name)+
-        ' <a class="dl-btn" style="margin-left:10px;padding:3px 10px" href="'+p.url+'" target="_blank">↗ 新标签页打开</a></div>' +
-        '<iframe src="'+p.url+'?_t='+Date.now()+'"></iframe>';
-    };
-    list.appendChild(it);
+  Object.keys(byGroup).forEach(function(g){
+    if (g !== '插图版' && g !== '人祖传') return;
+    var det = document.createElement('details');
+    det.className = 'toc-node lv1';
+    var sum = document.createElement('summary');
+    var s = document.createElement('span');
+    s.className = 'toc-link';
+    s.textContent = g + '（' + byGroup[g].length + '）';
+    sum.appendChild(s);
+    det.appendChild(sum);
+    var children = document.createElement('div');
+    children.className = 'toc-children';
+    byGroup[g].forEach(function(p){
+      var it = document.createElement('div');
+      it.className = 'toc-leaf';
+      var dot = document.createElement('span'); dot.className = 'toc-dot';
+      var link = document.createElement('span');
+      link.className = 'toc-link';
+      link.textContent = p.name;
+      link.onclick = function(){
+        list.querySelectorAll('.toc-leaf .toc-link').forEach(function(x){ x.classList.remove('cur'); });
+        link.classList.add('cur');
+        pane.querySelector('.pdf-view').innerHTML =
+          '<div style="padding:8px 10px;border-bottom:1px solid #e5e0d6;font-size:13px">📄 '+esc(p.name)+
+          ' <a class="dl-btn" style="margin-left:10px;padding:3px 10px" href="'+p.url+'" target="_blank">↗ 新标签页打开</a></div>' +
+          '<iframe src="'+p.url+'?_t='+Date.now()+'"></iframe>';
+      };
+      it.appendChild(dot); it.appendChild(link);
+      children.appendChild(it);
+    });
+    det.appendChild(children);
+    list.appendChild(det);
   });
-  if (!list.children.length) list.innerHTML = '<div class="empty">未找到插图版 PDF</div>';
-  // 人祖传
+  if (!list.children.length) list.innerHTML = '<div class="empty">未找到 PDF</div>';
+  // 人祖传独立 pane（单个 PDF 直接显示，无需折叠）
   var rz = $('read-rz');
   var rzPdf = (byGroup['人祖传']||[])[0];
   rz.innerHTML = rzPdf
@@ -1108,7 +1128,7 @@ function renderLore(){
   function renderNode(n){
     var html = '';
     if (n.children.length){
-      html += '<details class="toc-node lv'+n.level+'" open><summary><span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span></summary>' +
+      html += '<details class="toc-node lv'+n.level+'"><summary><span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span></summary>' +
         '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></details>';
     } else {
       html += '<div class="toc-leaf lv'+n.level+'"><span class="toc-dot"></span>' +
