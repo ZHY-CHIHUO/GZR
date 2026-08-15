@@ -125,9 +125,13 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .toc-link{display:inline-block;font-size:13px;cursor:pointer;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;vertical-align:middle;}
 .toc-link:hover{color:var(--accent);}
 .toc-node .toc-children{padding-left:18px;border-left:1px solid #f0e9da;margin-left:6px;}
+.toc-node.lv1>summary .toc-link{font-weight:700;font-size:14px;color:#4a3a26;}
+.toc-node.lv2>summary .toc-link{font-weight:600;font-size:13px;color:#7a5c3e;}
 .toc-leaf{display:flex;align-items:center;padding:3px 6px;}
 .toc-dot{display:inline-block;width:12px;text-align:center;color:#d8cfbc;font-size:8px;flex-shrink:0;}
-.toc-leaf .toc-link{color:#777;font-size:12px;max-width:170px;}
+.toc-leaf .toc-link{font-size:12px;color:#9a9284;max-width:170px;}
+.toc-link.cur{color:var(--accent);font-weight:700;}
+.toc-leaf.lv3 .toc-link{font-size:12px;color:#9a9284;}
 .lore-dl{margin:0 0 10px;display:inline-block;}
 .dl-btn{margin-top:10px;align-self:flex-start;border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;color:var(--ink);text-decoration:none;}
 .dl-btn:hover{background:#f0e9da;}
@@ -239,9 +243,9 @@ mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
           <button class="tool-btn full" onclick="clearChat()">🗑 清空全部</button>
         </div>
         <div id="nav-context" class="nav-context">
-          <div onclick="navDel()">🗑 删除</div>
-          <div onclick="navArchive()">📦 归档</div>
-          <div onclick="navRename()">✏️ 重命名</div>
+          <div onclick="navDel()">删除</div>
+          <div onclick="navArchive()">归档</div>
+          <div onclick="navRename()">重命名</div>
         </div>
       </div>
       <div class="chat-pane">
@@ -726,20 +730,32 @@ async function loadLibrary(){
     var toc = $('read-novel').querySelector('.toc-body');
     toc.innerHTML = '';
     j.volumes.forEach(function(v){
-      var volDiv = document.createElement('div');
-      volDiv.className = 'toc-vol';
-      volDiv.innerHTML = '▸ ' + esc(v.name) + '（' + v.chapters.length + ' 章）';
-      var list = document.createElement('div'); list.className='toc-chapters';
+      var det = document.createElement('details');
+      det.className = 'toc-node lv1';
+      det.open = true;
+      var sum = document.createElement('summary');
+      var s = document.createElement('span');
+      s.className = 'toc-link';
+      s.textContent = v.name + '（' + v.chapters.length + ' 章）';
+      sum.appendChild(s);
+      det.appendChild(sum);
+      var list = document.createElement('div');
+      list.className = 'toc-children';
       v.chapters.forEach(function(c){
         var it = document.createElement('div');
-        it.className='ch-item';
-        it.textContent = (c.n ? ('第'+c.n+'章 · ') : '') + stripSec(c.title);
-        it.onclick = function(e){ if (e && e.stopPropagation) e.stopPropagation(); showChapter(v.name, c.n); };
+        it.className = 'toc-leaf';
+        var dot = document.createElement('span');
+        dot.className = 'toc-dot';
+        var link = document.createElement('span');
+        link.className = 'toc-link';
+        link.textContent = (c.n ? ('第'+c.n+'章 · ') : '') + stripSec(c.title);
+        link.onclick = function(){ showChapter(v.name, c.n); };
+        it.appendChild(dot);
+        it.appendChild(link);
         list.appendChild(it);
       });
-      volDiv.onclick = function(){ volDiv.classList.toggle('open'); };
-      volDiv.appendChild(list);
-      toc.appendChild(volDiv);
+      det.appendChild(list);
+      toc.appendChild(det);
     });
     renderPdfLists(j.pdfs);
   } catch(e){ toast('阅读库加载失败：'+e.message); }
@@ -758,12 +774,12 @@ async function showChapter(vol, ch){
     $('ch-prev').onclick = function(){ stepChapter(-1); };
     $('ch-next').onclick = function(){ stepChapter(1); };
     // 目录高亮当前章
-    document.querySelectorAll('.ch-item').forEach(function(it){ it.classList.remove('cur'); });
-    var list = $('read-novel').querySelectorAll('.toc-vol');
+    document.querySelectorAll('#read-novel .toc-leaf .toc-link').forEach(function(it){ it.classList.remove('cur'); });
+    var list = $('read-novel').querySelectorAll('.toc-node');
     for (var i=0;i<list.length;i++){
       if (list[i].textContent.indexOf(vol)===0){
-        list[i].classList.add('open');
-        var items = list[i].querySelectorAll('.ch-item');
+        list[i].open = true;
+        var items = list[i].querySelectorAll('.toc-leaf .toc-link');
         var target = items[ch-1]; if (target) target.classList.add('cur');
         break;
       }
@@ -1092,10 +1108,10 @@ function renderLore(){
   function renderNode(n){
     var html = '';
     if (n.children.length){
-      html += '<details class="toc-node" open><summary><span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span></summary>' +
+      html += '<details class="toc-node lv'+n.level+'" open><summary><span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span></summary>' +
         '<div class="toc-children">' + n.children.map(renderNode).join('') + '</div></details>';
     } else {
-      html += '<div class="toc-leaf"><span class="toc-dot"></span>' +
+      html += '<div class="toc-leaf lv'+n.level+'"><span class="toc-dot"></span>' +
         '<span class="toc-link" data-anchor="'+n.anchor+'">'+esc(n.text)+'</span></div>';
     }
     return html;
