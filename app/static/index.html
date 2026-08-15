@@ -80,9 +80,20 @@ footer.chat-bar{background:var(--card);border-top:1px solid var(--line);padding:
 .pdf-item.active{background:#f0e9da;border-color:var(--accent2);}
 .pdf-view{flex:1;border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden;}
 .pdf-view iframe{width:100%;height:100%;border:none;}
-.lore-pane{flex:1;display:flex;flex-direction:column;min-height:0;}
-.lore-frame{flex:1;border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden;min-height:0;}
-.lore-frame iframe{width:100%;height:100%;border:none;}
+.lore-h{font-weight:700;color:#5a4530;margin:20px 0 8px;}
+.lore-h1{font-size:18px;border-left:4px solid #7a5c3e;padding-left:10px;}
+.lore-h2{font-size:15px;border-left:3px solid #b08d57;padding-left:8px;color:#5a4530;}
+.lore-h3{font-size:14px;color:#7a5c3e;padding-left:6px;}
+.lore-p{margin:6px 0;line-height:2;font-size:14px;color:#333;}
+.toc-vol-title{padding:6px 8px;font-size:13px;font-weight:700;cursor:pointer;border-radius:6px;color:#5a4530;}
+.toc-vol-title:hover{background:#f5f0e6;}
+.toc-vol.open>.toc-vol-title{color:var(--accent);}
+.toc-vol .toc-chapters{display:none;padding-left:10px;}
+.toc-vol.open .toc-chapters{display:block;}
+.toc-vol.sub{padding-left:6px;}
+.toc-vol.sub .toc-vol-title{font-weight:600;color:#7a5c3e;font-size:12px;}
+.ch-item.l3{padding-left:20px;font-size:12px;color:#9a9284;}
+.lore-dl{margin:0 0 10px;display:inline-block;}
 .dl-btn{margin-top:10px;align-self:flex-start;border:1px solid var(--line);background:#faf8f3;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;color:var(--ink);text-decoration:none;}
 .dl-btn:hover{background:#f0e9da;}
 .empty{padding:40px;text-align:center;color:var(--muted);font-size:14px;}
@@ -215,10 +226,11 @@ mark{background:#ffe08a;padding:0 2px;border-radius:2px;}
     <div id="read-pdf" class="read-pane" hidden><div class="empty">加载中…</div></div>
     <div id="read-rz" class="read-pane" hidden><div class="empty">加载中…</div></div>
     <div id="read-lore" class="read-pane" hidden>
-      <div class="lore-pane">
-        <div class="lore-frame"><iframe src="/api/lore/html"></iframe></div>
-        <a class="dl-btn" href="/api/lore/download">⬇ 下载 docx 原件</a>
+      <div class="toc-pane" id="lore-toc">
+        <div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="toggleLoreToc()" title="收起/展开目录">«</button></div>
+        <div class="toc-body"><div class="empty">加载中…</div></div>
       </div>
+      <div class="text-pane" id="lore-text"><div class="empty">加载中…</div></div>
     </div>
   </section>
 
@@ -397,6 +409,7 @@ document.querySelectorAll('.rtab').forEach(function(btn){
     btn.classList.add('active');
     ['novel','pdf','rz','lore'].forEach(function(t){ $('read-'+t).hidden = (t !== btn.dataset.rt); });
     if ((btn.dataset.rt==='pdf'||btn.dataset.rt==='rz') && !$('read-pdf').dataset.loaded) loadPdfs();
+    if (btn.dataset.rt==='lore') loadLore();
   });
 });
 
@@ -426,6 +439,16 @@ function toggleToc(){
   t.classList.toggle('collapsed');
   var btn = t.querySelector('.toc-fold');
   btn.textContent = t.classList.contains('collapsed') ? '»' : '«';
+}
+function toggleLoreToc(){
+  var t = $('lore-toc');
+  t.classList.toggle('collapsed');
+  var btn = t.querySelector('.toc-fold');
+  btn.textContent = t.classList.contains('collapsed') ? '»' : '«';
+}
+function scrollToLore(anchor){
+  var el = document.getElementById(anchor);
+  if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
 }
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===name); });
@@ -983,6 +1006,44 @@ function guessRiddle(){
     fb.innerHTML = '❌ 不对，再想想（可用「更多提示」）';
     moreHint();
   }
+}
+/* ---------- 资料合集（统一原版两栏 UI） ---------- */
+var LORE_DATA = null;
+async function loadLore(){
+  if (LORE_DATA) return;
+  try {
+    LORE_DATA = await (await fetch('/api/lore/data')).json();
+    renderLore();
+  } catch(e){ $('lore-toc').querySelector('.toc-body').innerHTML = '<div class="empty">加载失败</div>'; }
+}
+function renderLore(){
+  // 目录树
+  var tb = $('lore-toc').querySelector('.toc-body');
+  tb.innerHTML = '';
+  var html = '';
+  var stack = [];
+  LORE_DATA.toc.forEach(function(item){
+    while (stack.length && stack[stack.length - 1] >= item.level){
+      stack.pop(); html += '</div></div>';
+    }
+    if (item.level >= 3){
+      html += '<div class="ch-item l3" onclick="scrollToLore(\''+item.anchor+'\')">'+esc(item.text)+'</div>';
+    } else {
+      html += '<div class="toc-vol'+(item.level===2?' sub':'')+'"><div class="toc-vol-title" onclick="this.parentNode.classList.toggle(\'open\')">▸ '+esc(item.text)+'</div><div class="toc-chapters">';
+      stack.push(item.level);
+    }
+  });
+  while (stack.length){ stack.pop(); html += '</div></div>'; }
+  tb.innerHTML = html;
+  // 正文
+  var tp = $('lore-text');
+  var b = '<div class="ch-title">'+esc(LORE_DATA.title)+'</div>' +
+    '<a class="dl-btn lore-dl" href="/api/lore/download">⬇ 下载 docx 原件</a>';
+  LORE_DATA.paras.forEach(function(p){
+    if (p.kind === 'h2') b += '<div class="lore-h lore-h'+p.level+'" id="'+p.anchor+'">'+esc(p.text)+'</div>';
+    else b += '<div class="lore-p">'+esc(p.text)+'</div>';
+  });
+  tp.innerHTML = b;
 }
 /* 游戏子页签 */
 document.querySelectorAll('.rtab[data-gt]').forEach(function(btn){

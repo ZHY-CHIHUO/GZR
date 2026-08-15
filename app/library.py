@@ -126,6 +126,69 @@ def pdf_files():
 _lore_html_cache = None
 
 
+def lore_structured():
+    """资料合集结构化数据（供主应用统一 UI 渲染）：{title, toc:[{text,level,anchor}], paras:[{kind,level,text,anchor}]}"""
+    from docx import Document
+    import json as _json
+    from app.config import DATA_DIR as _DD
+
+    def _looks_body(t):
+        if re.match(r"^\d+[.、]\s*", t):
+            return True
+        if len(t) > 30 or t.endswith(("。", "，", "！", "？", "；", "、", "：", ":")):
+            return True
+        return False
+
+    def _heading_level(t):
+        if _looks_body(t) or len(t) < 2 or len(t) > 24:
+            return None
+        if t.startswith(("【", "[", "（", "(")) or re.fullmatch(r"[\]\]）\)\-—=·\s]+", t):
+            return None
+        if "：" in t or ":" in t:
+            return None
+        return 2
+
+    doc = Document(str(LORE_DOCX))
+    raw = [(p.text.strip(), (p.style.name if p.style else "") or "")
+           for p in doc.paragraphs if p.text and p.text.strip()]
+    paras = [(t, s) for t, s in raw if not re.fullmatch(r"\[\d+\]\s*", t)]
+    merged = []
+    for t, s in paras:
+        if (t.startswith("【") or t.startswith("】")) and merged:
+            merged[-1] = (merged[-1][0] + t, merged[-1][1])
+        else:
+            merged.append((t, s))
+    toc_items = None
+    tp = _DD / "lore_toc.json"
+    if tp.is_file():
+        try:
+            toc_items = _json.loads(tp.read_text(encoding="utf-8"))["items"]
+        except Exception:
+            toc_items = None
+
+    toc, out = [], []
+    idx = 0
+    seen = set()
+    for pi, (t, s) in enumerate(merged):
+        lv = None
+        txt = t
+        if toc_items is not None and pi < len(toc_items):
+            lv = int(toc_items[pi].get("level", 0))
+            txt = str(toc_items[pi].get("text") or t)
+        else:
+            lv = _heading_level(t)
+        if lv:
+            idx += 1
+            anchor = f"sec{idx}"
+            if txt not in seen:
+                seen.add(txt)
+                toc.append({"text": txt, "level": min(lv, 3), "anchor": anchor})
+            out.append({"kind": "h2", "level": min(lv, 3), "text": txt, "anchor": anchor})
+        else:
+            out.append({"kind": "p", "text": txt})
+    return {"title": "《蛊真人》资料合集", "toc": toc, "paras": out}
+
+
 def lore_html():
     """资料合集 docx -> HTML（带目录锚点），进程内缓存。"""
     global _lore_html_cache

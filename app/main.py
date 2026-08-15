@@ -342,6 +342,11 @@ def locate(req: LocateReq):
     return {"ok": True, "path": path}
 
 
+@app.get("/api/lore/data")
+def lore_data():
+    return library.lore_structured()
+
+
 @app.get("/api/lore/html")
 def lore_html():
     return HTMLResponse(library.lore_html())
