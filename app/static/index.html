@@ -878,7 +878,8 @@ function renderPdfList(pdf, chs, chsKey){
   (function collect(n){ if (n.children.length){ n.children.forEach(collect); } else { leaves.push(n); } })(stack[0]);
   leaves.forEach(function(n, i){
     n.idx = chs.length;
-    var end = (i < leaves.length - 1) ? (leaves[i + 1].page - 1) : 999999;
+    // 允许重叠：包含下一章起始页（两章同页/紧邻时内容不丢），且保证 end >= start
+    var end = (i < leaves.length - 1) ? Math.max(leaves[i].page || 1, leaves[i + 1].page || 1) : 999999;
     chs.push({title: n.title, url: pdf.url, start: n.page || 1, end: end});
   });
   (function assign(n){ if (n.children.length){ n.children.forEach(assign); n.idx = n.children[0].idx; } })(stack[0]);
@@ -892,7 +893,6 @@ function renderPdfList(pdf, chs, chsKey){
   }
   return tree.map(renderNode).join('');
 }
-var RZ_FULL = null;  // 人祖传整本渲染缓存 {url, wrap, canvases:[]}
 function renderChapter(idx, chsKey, pane){
   initPdfJs();
   var chs = chsKey === 'pdf' ? PDF_CHS : RZ_CHS;
@@ -907,25 +907,14 @@ function renderChapter(idx, chsKey, pane){
     '</div>';
   view.innerHTML = nav + '<div class="pdf-canvas-wrap"></div>' + nav;
   var wrap = view.querySelector('.pdf-canvas-wrap');
-  var whole = (chsKey === 'rz');  // 人祖传：整本连续渲染，目录点击只定位
   getDoc(ch.url).then(function(doc){
-    // 整本模式且已缓存：直接定位到目标页
-    if (whole && RZ_FULL && RZ_FULL.url === ch.url){
-      var tc = RZ_FULL.canvases[ch.start - 1];
-      if (tc) RZ_FULL.wrap.scrollTop = Math.max(0, tc.offsetTop - 10);
-      return;
-    }
-    var start = whole ? 1 : ch.start;
-    var end = whole ? doc.numPages : Math.min(ch.end, doc.numPages);
-    var canvases = [];
-    var targetCanvas = null;
+    var start = ch.start;
+    var end = Math.min(ch.end, doc.numPages);
     (async function(){
       for (var p = start; p <= end; p++){
         var c = document.createElement('canvas');
         c.className = 'pdf-page-canvas';
         wrap.appendChild(c);
-        canvases.push(c);
-        if (whole && p === ch.start) targetCanvas = c;
         try {
           var page = await doc.getPage(p);
           var viewport = page.getViewport({scale: 2.5});
@@ -939,12 +928,7 @@ function renderChapter(idx, chsKey, pane){
           await page.render({canvasContext: ctx, viewport: viewport, transform: tr}).promise;
         } catch(e){}
       }
-      if (whole){
-        RZ_FULL = {url: ch.url, wrap: wrap, canvases: canvases};
-        if (targetCanvas) wrap.scrollTop = Math.max(0, targetCanvas.offsetTop - 10);
-      } else {
-        wrap.scrollTop = 0;
-      }
+      wrap.scrollTop = 0;
     })();
   }).catch(function(e){ view.innerHTML = '<div class="empty">PDF 加载失败：'+esc(e.message)+'</div>'; });
   pane.querySelectorAll('.toc-link.cur').forEach(function(x){ x.classList.remove('cur'); });
