@@ -124,13 +124,27 @@ def pdf_files():
 
 
 _lore_html_cache = None
+_lore_structured_cache = None
 
 
 def lore_structured():
-    """资料合集结构化数据（供主应用统一 UI 渲染）：{title, toc:[{text,level,anchor}], paras:[{kind,level,text,anchor}]}"""
+    """资料合集结构化数据（供主应用统一 UI 渲染）：{title, toc:[{text,level,anchor}], paras:[{kind,level,text,anchor}]}
+    磁盘缓存：首次生成后写入 data/lore_structured_cache.json，之后秒开（docx 解析约 12 秒）。"""
+    global _lore_structured_cache
+    if _lore_structured_cache is not None:
+        return _lore_structured_cache
     from docx import Document
     import json as _json
-    from app.config import DATA_DIR as _DD
+    from app.config import DATA_DIR as _DD, BASE as _BASE
+    _cache_file = _BASE / "data" / "lore_structured_cache.json"
+    _toc_path = _DD / "lore_toc.json"
+    _toc_mtime = _toc_path.stat().st_mtime if _toc_path.is_file() else 0
+    if _cache_file.is_file() and _cache_file.stat().st_mtime >= _toc_mtime:
+        try:
+            _lore_structured_cache = _json.loads(_cache_file.read_text(encoding="utf-8"))
+            return _lore_structured_cache
+        except Exception:
+            pass
 
     def _looks_body(t):
         if re.match(r"^\d+[.、]\s*", t):
@@ -186,7 +200,12 @@ def lore_structured():
             out.append({"kind": "h2", "level": min(lv, 3), "text": txt, "anchor": anchor})
         else:
             out.append({"kind": "p", "text": txt})
-    return {"title": "《蛊真人》资料合集", "toc": toc, "paras": out}
+    _lore_structured_cache = {"title": "《蛊真人》资料合集", "toc": toc, "paras": out}
+    try:
+        _cache_file.write_text(_json.dumps(_lore_structured_cache, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+    return _lore_structured_cache
 
 
 def lore_html():
