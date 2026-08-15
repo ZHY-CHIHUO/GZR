@@ -196,7 +196,12 @@
         <div class="result" id="key-result" aria-live="polite"></div>
       </div>
       <div class="card">
-        <h3><span class="step-no">2</span>检索模型（影响准确率与速度）</h3>
+        <h3><span class="step-no">2</span>检索不到时联网搜索</h3>
+        <label class="toggle-row"><input type="checkbox" id="web-fallback"> 资料库未检索到时，用 DeepSeek 原生联网（Responses API web_search）回答，并标注「网络回答」附来源链接（消耗额外额度）。</label>
+        <div class="result" id="web-fallback-status"></div>
+      </div>
+      <div class="card">
+        <h3><span class="step-no">3</span>检索模型（影响准确率与速度）</h3>
         <p>不同向量模型的准确率与查询速度不同（实测数据见选项说明）。切换后自动重建检索器，无需重启。</p>
         <select id="embed-model" class="field-wide"></select>
         <div class="result" id="model-result"></div>

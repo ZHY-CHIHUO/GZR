@@ -39,6 +39,7 @@ class AskReq(BaseModel):
     question: str
     scope: str = "all"          # all / novel / lore
     history: list = []          # [{role, content}, ...]
+    web_fallback: bool = True   # 检索不到时是否联网搜索（网络回答）
 
 
 class SettingsReq(BaseModel):
@@ -173,6 +174,7 @@ def ask(req: AskReq):
     hits = _force_wiki_hits(q, retriever.search(q, scope=req.scope))
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
     retried = False
+    web_sources = []
     if config.KEY:
         try:
             answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
@@ -191,16 +193,37 @@ def ask(req: AskReq):
                     system, user = system2, user2
                 except Exception:
                     retried = False
+        # 仍然未查到且允许联网 -> 用 Responses API + web_search 联网回答
+        web_used = False
+        if req.web_fallback and any(m in answer for m in _RETRY_MARKS):
+            try:
+                from .rag import ask_llm_web
+                web_system = ("你是《蛊真人》资料问答助手，当前资料库未能提供答案。"
+                              "请使用联网搜索获取信息，基于搜索结果用简体中文回答，"
+                              "并在回答末尾列出参考来源（网站名或网址）；确实查不到就说明无法确认。")
+                web_answer, cites, searched = ask_llm_web(
+                    web_system, q, config.KEY, config.BASE_URL, config.MODEL, history=req.history
+                )
+                if web_answer:
+                    web_used = True
+                    answer = "（资料库未检索到相关内容，以下为**网络检索回答**，请自行核对来源）\n\n" + web_answer
+                    web_sources = [{
+                        "type": "web", "label": f"网络来源{i + 1}", "url": c.get("url", ""),
+                        "title": c.get("title", ""), "excerpt": c.get("title", ""),
+                    } for i, c in enumerate(cites[:10])]
+            except Exception:
+                web_sources = []
         mock = False
     else:
         answer = mock_answer(hits)
         mock = True
     return {
         "answer": answer,
-        "sources": [format_source(h) for h in hits],
+        "sources": [format_source(h) for h in hits] + web_sources,
         "cost_rmb": estimate_cost(system, user, answer) if not mock else 0.0,
         "mock": mock,
         "retried": retried,
+        "web": web_used,
         "wiki_cites": _wiki_cites_in(answer),
     }
 

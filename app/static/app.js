@@ -119,6 +119,7 @@ function switchTab(name){
   if (name==='wiki') loadWiki();
 }
 async function refreshHealth(){
+  initWebFallback();
   try { HEALTH = await (await fetch('/api/health')).json(); }
   catch(e){ HEALTH = null; }
   updateStatus();
@@ -190,14 +191,16 @@ function renderSources(sources){
   var html = '';
   sources.forEach(function(s){
     var btn = '';
-    if (s.type === 'wiki'){
+    if (s.type === 'web'){
+      btn = '<button class="src-btn" data-act="web-open" data-url="'+attrEsc(s.url)+'">打开链接</button>';
+    } else if (s.type === 'wiki'){
       btn = '<button class="src-btn" data-act="wiki" data-name="'+attrEsc(s.name)+'">查看词条</button>';
     } else if (s.type === 'lore'){
       btn = '<button class="src-btn" data-act="lore-read" data-sec="'+attrEsc(s.title||s.section||'')+'">阅读原文</button>';
     } else {
       btn = '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">阅读原文</button>';
     }
-    html += '<div class="src-card">' +
+    html += '<div class="src-card'+(s.type==='web' ? ' src-web' : '')+'">' +
       '<div class="src-head"><span class="src-label">'+esc(s.label)+'</span>' +
       btn +
       '</div>' +
@@ -214,7 +217,7 @@ async function ask(){
   var d = addMsg('思考中…', 'bot');
   try {
     var r = await fetch('/api/ask', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({question: question, scope: $('scope').value, history: HISTORY.slice(0, -1)})});
+      body: JSON.stringify({question: question, scope: $('scope').value, history: HISTORY.slice(0, -1), web_fallback: localStorage.getItem('gzr.webFallback') !== '0'})});
     var j = await r.json();
     if (j.error){ d.textContent = '出错了：' + j.error; return; }
     var body = mdRender(j.answer);
@@ -262,6 +265,9 @@ $('chat').addEventListener('click', function(ev){
   }
   else if (btn.dataset.act === 'wiki'){
     openWikiByName(btn.dataset.name);
+  }
+  else if (btn.dataset.act === 'web-open'){
+    window.open(btn.dataset.url, '_blank');
   }
 });
 
@@ -662,6 +668,16 @@ async function loadModels(){
       sel.appendChild(opt);
     });
   } catch(e){ /* 忽略 */ }
+}
+async function initWebFallback(){
+  var cb = $('web-fallback');
+  if (!cb) return;
+  cb.checked = localStorage.getItem('gzr.webFallback') !== '0';
+  cb.onchange = function(){
+    localStorage.setItem('gzr.webFallback', cb.checked ? '1' : '0');
+    var st = $('web-fallback-status');
+    if (st){ st.className='result ok'; st.textContent = cb.checked ? '已开启：查不到时会联网回答（消耗额外额度）' : '已关闭：查不到时如实说明，不联网'; }
+  };
 }
 async function saveEmbedModel(){
   var id = $('embed-model').value;

@@ -247,3 +247,6 @@ input, select, textarea{ font-size:14.5px; }
 .trash-item-main span{ display:block; margin-top:3px; color:#777; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:520px; }
 .trash-item-main em{ display:block; margin-top:3px; color:#aaa; font-size:11.5px; font-style:normal; }
 .trash-actions{ flex:none; display:flex; gap:8px; }
+.src-web{ border-left:3px solid var(--accent) !important; }
+.toggle-row{ display:flex; align-items:flex-start; gap:8px; font-size:13.5px; line-height:1.7; color:#333; cursor:pointer; }
+.toggle-row input{ margin-top:3px; }

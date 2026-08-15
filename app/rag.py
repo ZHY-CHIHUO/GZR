@@ -220,3 +220,112 @@ def estimate_cost(system, user, answer, in_price=3.0, out_price=6.0):
     tin = int((len(system) + len(user)) * 0.7)
     tout = int(len(answer) * 0.7)
     return round((tin * in_price + tout * out_price) / 1e6, 4)
+
+def _chat_web(system, user, api_key, base_url, model, history=None):
+    """兼容路径：chat.completions + web_search 工具（部分服务商/代理支持联网）。"""
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key, base_url=base_url)
+    messages = [{"role": "system", "content": system}]
+    for h in (history or [])[-8:]:
+        role = h.get("role")
+        c = str(h.get("content") or "")[:2000]
+        if role in ("user", "assistant") and c:
+            messages.append({"role": role, "content": c})
+    messages.append({"role": "user", "content": user})
+    resp = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        tools=[{"type": "web_search"}],
+        tool_choice="auto",
+        temperature=0.4,
+        max_tokens=1100,
+    )
+    msg = resp.choices[0].message
+    text = (msg.content or "").strip()
+    citations = []
+    for c in (getattr(msg, "citations", None) or []):
+        if isinstance(c, dict):
+            citations.append({"url": c.get("url", ""), "title": c.get("title", "") or c.get("url", "")})
+        elif isinstance(c, str):
+            citations.append({"url": c, "title": c})
+    searched = bool(getattr(msg, "tool_calls", None)) or bool(citations)
+    return text, citations, searched
+
+
+def ask_llm_web(system, user, api_key, base_url, model, history=None):
+    """联网回答：优先 DeepSeek 官方 Responses API + 原生 web_search，
+    失败则回退到 chat.completions + web_search 工具（兼容代理/新-api）。
+
+    返回 (answer_text, citations, searched)。"""
+    err_msgs = []
+    # 1) 官方 Responses API 路径
+    try:
+        import json as _json
+        import urllib.request as _url
+        import urllib.error as _urlerr
+
+        web_model = model if str(model).startswith("deepseek-v4") else "deepseek-v4-flash"
+        input_items = []
+        for h in (history or [])[-8:]:
+            role = h.get("role")
+            content = str(h.get("content") or "")[:2000]
+            if role in ("user", "assistant") and content:
+                input_items.append({"role": role, "content": content})
+        input_items.append({"role": "user", "content": user})
+        payload = {
+            "model": web_model,
+            "instructions": system,
+            "input": input_items,
+            "tools": [{"type": "web_search"}],
+            "reasoning": {"effort": "none"},
+            "max_output_tokens": 1100,
+        }
+        endpoint = (str(base_url).rstrip("/")) + "/responses"
+        req = _url.Request(
+            endpoint,
+            data=_json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": "Bearer " + api_key},
+            method="POST",
+        )
+        try:
+            resp = _url.urlopen(req, timeout=90)
+            data = _json.loads(resp.read().decode("utf-8"))
+        except _urlerr.HTTPError as e:
+            raise RuntimeError(f"Responses HTTP {e.code}: {e.read().decode('utf-8', 'ignore')[:160]}")
+        except Exception as e:
+            raise RuntimeError(f"Responses 连接失败：{e}")
+        texts, citations, searched = [], [], False
+        for item in data.get("output", []) or []:
+            if item.get("type") == "web_search_call":
+                searched = True
+            if item.get("type") == "message":
+                for part in item.get("content", []) or []:
+                    if part.get("type") == "output_text":
+                        t = part.get("text") or ""
+                        if t:
+                            texts.append(t)
+                        for ann in (part.get("annotations") or []):
+                            if ann.get("type") == "url_citation":
+                                citations.append({
+                                    "url": ann.get("url") or "",
+                                    "title": ann.get("title") or ann.get("url") or "",
+                                })
+        text = (chr(10).join(texts)).strip()
+        if text:
+            return text, citations, searched
+        raise RuntimeError("Responses 返回空文本")
+    except Exception as e:
+        err_msgs.append(str(e))
+
+    # 2) 兼容路径
+    try:
+        text, citations, searched = _chat_web(system, user, api_key, base_url, model, history)
+        if text:
+            return text, citations, searched
+        raise RuntimeError("chat 联网返回空文本")
+    except Exception as e:
+        err_msgs.append(str(e))
+
+    raise RuntimeError("；".join(err_msgs) or "未知联网失败")
+
+
