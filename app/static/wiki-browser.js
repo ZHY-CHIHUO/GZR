@@ -25,4 +25,16 @@ var WIKI_EDIT=null;
 function wikiCatOptions(sel){var opts='';WIKI_ORDER.forEach(function(c){if(wikiItems(c).length)opts+='<option value="'+esc(c)+'">'+esc(WIKI_LABELS[c]||c)+'</option>';});sel.innerHTML=opts;}
 function openWikiEdit(){var e=WIKI_CURRENT.entry,c=WIKI_CURRENT.cat;if(!e)return;wikiCatOptions($('we-cat'));$('we-cat').value=c;$('we-name').value=e.name||'';$('we-sub').value=e.sub||'';$('we-section').value=e.section||'';$('we-desc').value=e.desc||'';WIKI_EDIT={cat:c,name:e.name};$('wiki-edit-modal').classList.add('show');}
 async function saveWikiEntry(){var payload={cat:$('we-cat').value,name:($('we-name').value||'').trim(),sub:($('we-sub').value||'').trim(),section:($('we-section').value||'').trim(),desc:($('we-desc').value||'').trim(),oldCat:WIKI_EDIT.cat,oldName:WIKI_EDIT.name};if(!payload.name||!payload.desc){toast('名称和描述不能为空');return;}try{var r=await fetch('/api/wiki/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});var j=await r.json();if(!j.ok)throw new Error(j.error||'保存失败');WIKI=null;WIKI_SUBS={};await loadWiki();var nc=j.cat||payload.cat,nn=payload.name,found=null;(WIKI.categories[nc]||[]).forEach(function(x){if(x.name===nn)found=x;});if(found)openCatalogueAt(nc,found);closeModal('wiki-edit-modal');toast('已保存到资料库');}catch(e){toast('保存失败：'+e.message);}}
+async function openWikiByName(name){
+  switchTab('wiki');
+  if (!WIKI) await loadWiki();
+  var found = null, cat = null;
+  Object.keys(WIKI.categories || {}).forEach(function(c){
+    if (found) return;
+    (WIKI.categories[c] || []).forEach(function(e){ if (!found && e.name === name){ found = e; cat = c; } });
+  });
+  if (!found) (WIKI.other || []).forEach(function(e){ if (!found && e.name === name){ found = e; cat = '其他'; } });
+  if (found) openCatalogueAt(cat, found);
+  else toast('未找到词条：' + name);
+}
 async function deleteWikiEntry(){if(!confirm('确定删除条目「'+WIKI_CURRENT.entry.name+'」？该操作会写入资料库。'))return;try{var r=await fetch('/api/wiki/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({delete:true,cat:WIKI_CURRENT.cat,name:WIKI_CURRENT.entry.name})});var j=await r.json();if(!j.ok)throw new Error(j.error||'删除失败');WIKI=null;WIKI_SUBS={};await loadWiki();renderWikiHome();toast('已删除');}catch(e){toast('删除失败：'+e.message);}}

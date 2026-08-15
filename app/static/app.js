@@ -176,6 +176,15 @@ function loadChat(){
   } catch(e){}
 }
 function attrEsc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function renderWikiCites(cites){
+  if (!cites || !cites.length) return '';
+  var html = '<div class="wiki-cites"><span class="wiki-cites-label">相关词条</span>';
+  cites.forEach(function(c){
+    html += '<button type="button" class="wiki-cite-chip" onclick="openWikiByName(\''+attrEsc(c.name)+'\')">'+esc(c.name)+'</button>';
+  });
+  html += '</div>';
+  return html;
+}
 function renderSources(sources){
   if (!sources || !sources.length) return '';
   var html = '';
@@ -212,7 +221,7 @@ async function ask(){
     });
     var all = j.sources || [];
     var shown = cited.length ? cited.map(function(n){ return all[n - 1]; }).filter(Boolean) : all;
-    d.innerHTML = body + renderSources(shown) + cost;
+    d.innerHTML = body + renderWikiCites(j.wiki_cites) + renderSources(shown) + cost;
     HISTORY.push({role:'assistant', content: j.answer});
   } catch(e){ d.textContent = '请求失败：'+e.message; }
   finally { $('send').disabled = false; $('q').focus(); saveChat(); }

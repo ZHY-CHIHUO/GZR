@@ -128,6 +128,7 @@ def ask(req: AskReq):
         "sources": [format_source(h) for h in hits],
         "cost_rmb": estimate_cost(system, user, answer) if not mock else 0.0,
         "mock": mock,
+        "wiki_cites": _wiki_cites_in(answer),
     }
 
 
@@ -227,6 +228,44 @@ def list_models():
 _wiki = None
 _quiz = None
 _content_mtime = {}
+_wiki_names = None
+_wiki_names_mtime = None
+
+
+def _wiki_name_index():
+    """百科词条名 -> 分类 索引（按文件修改时间缓存）。"""
+    global _wiki_names, _wiki_names_mtime
+    mt = _content_mtime.get("wiki")
+    if _wiki_names is not None and _wiki_names_mtime == mt:
+        return _wiki_names
+    d = {}
+    for cat, items in (_wiki or {}).items():
+        for e in items:
+            n = e.get("name", "")
+            if len(n) >= 2 and n not in d:
+                d[n] = cat
+    _wiki_names = d
+    _wiki_names_mtime = mt
+    return d
+
+
+def _wiki_cites_in(text, limit=8):
+    """在回答文本中找出命中的百科词条（长名优先），供前端跳转词条页。"""
+    try:
+        _load_content()  # 确保百科已加载
+        idx = _wiki_name_index()
+        names = sorted(idx.keys(), key=len, reverse=True)
+        used = set()
+        cites = []
+        for n in names:
+            if n in text and n not in used:
+                cites.append({"name": n, "cat": idx[n]})
+                used.add(n)
+                if len(cites) >= limit:
+                    break
+        return cites
+    except Exception:
+        return []
 
 
 def _load_content():

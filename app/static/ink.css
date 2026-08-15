@@ -221,7 +221,7 @@ input, select, textarea{ font-size:14.5px; }
 #wiki-back-results::before{ content:"← "; color:var(--accent); }
 .wiki-article-actions{ display:flex; gap:14px; }
 #wiki-edit-btn{ color:var(--accent); }
-#wiki-edit-btn::before{ content:"✎ "; }
+#wiki-edit-btn::before{ content:"编 · "; }
 #wiki-del-btn{ color:#999; }
 #wiki-del-btn:hover{ color:var(--accent); }
 .we-form{ display:flex; flex-direction:column; gap:11px; }
@@ -234,3 +234,8 @@ input, select, textarea{ font-size:14.5px; }
 .cq-item-opts span.cq-right{ background:#F2F2EF; border-color:var(--accent); color:var(--accent); font-weight:700; }
 .cq-empty{ padding:14px 0; color:var(--muted); font-size:13.5px; text-align:center; }
 #cq-import{ width:100%; min-height:132px; font-family:Consolas,Monaco,monospace; font-size:12.5px; }
+/* ---- 回答中的相关词条 ---- */
+.wiki-cites{ display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin-top:10px; padding:8px 12px; border:1px dashed var(--line); border-radius:4px; background:#FAFAF8; }
+.wiki-cites-label{ font-size:12px; color:var(--muted); letter-spacing:1px; }
+.wiki-cite-chip{ border:1px solid var(--line); background:#fff; color:var(--accent); cursor:pointer; padding:3px 11px; border-radius:3px; font-size:13px; font-family:"Songti SC","SimSun",serif; }
+.wiki-cite-chip:hover{ border-color:var(--accent); background:#FAEDE9; }
