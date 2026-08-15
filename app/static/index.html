@@ -100,7 +100,7 @@
         </div>
         <div class="wiki-home-body">
           <section class="wiki-category-section" aria-labelledby="wiki-category-title">
-            <div class="wiki-section-head"><div><p class="wiki-overline">EXPLORE</p><h2 id="wiki-category-title">浏览分类</h2></div><span id="wiki-total-count" class="wiki-total-count"></span><button type="button" class="wiki-add-home" id="wiki-add-home" onclick="openWikiAdd()">+ 新增词条</button></div>
+            <div class="wiki-section-head"><div><p class="wiki-overline">EXPLORE</p><h2 id="wiki-category-title">浏览分类</h2></div><span id="wiki-total-count" class="wiki-total-count"></span><span class="wiki-head-btns"><button type="button" class="wiki-add-home" onclick="openWikiTrash()">回收站</button><button type="button" class="wiki-add-home" onclick="openWikiAdd()">+ 新增词条</button></span></div>
             <div class="wiki-category-grid" id="wiki-cats"></div>
           </section>
 
@@ -273,6 +273,14 @@
       </div>
 
     </div>
+  </div>
+</div>
+
+<!-- 回收站弹窗 -->
+<div class="modal-bg" id="wiki-trash-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h2>回收站</h2><button class="modal-x" onclick="closeModal('wiki-trash-modal')">×</button></div>
+    <div class="modal-body" id="wiki-trash-body"><div class="empty">加载中…</div></div>
   </div>
 </div>
 

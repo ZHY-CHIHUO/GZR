@@ -80,4 +80,42 @@ async function openWikiByName(name){
   if (found) openCatalogueAt(cat, found);
   else toast('未找到词条：' + name);
 }
-async function deleteWikiEntry(){if(!confirm('确定删除条目「'+WIKI_CURRENT.entry.name+'」？该操作会写入资料库。'))return;try{var r=await fetch('/api/wiki/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({delete:true,cat:WIKI_CURRENT.cat,name:WIKI_CURRENT.entry.name})});var j=await r.json();if(!j.ok)throw new Error(j.error||'删除失败');WIKI=null;WIKI_SUBS={};await loadWiki();renderWikiHome();toast('已删除');}catch(e){toast('删除失败：'+e.message);}}
+async function deleteWikiEntry(){if(!confirm('确定删除条目「'+WIKI_CURRENT.entry.name+'」？删除后可在回收站恢复。'))return;try{var r=await fetch('/api/wiki/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({delete:true,cat:WIKI_CURRENT.cat,name:WIKI_CURRENT.entry.name})});var j=await r.json();if(!j.ok)throw new Error(j.error||'删除失败');WIKI=null;WIKI_SUBS={};await loadWiki();renderWikiHome();toast('已删除，可在回收站恢复');}catch(e){toast('删除失败：'+e.message);}}
+async function openWikiTrash(){
+  var box=$('wiki-trash-body'); box.innerHTML='<div class="empty">加载中…</div>';
+  $('wiki-trash-modal').classList.add('show');
+  try{
+    var j=await (await fetch('/api/wiki/trash')).json();
+    var items=j.items||[];
+    if(!items.length){ box.innerHTML='<div class="empty">回收站是空的。</div>'; return; }
+    var h='<div class="gh-sec">';
+    h+=items.map(function(t){
+      var ts=t.deletedAt?new Date(t.deletedAt*1000).toLocaleString('zh-CN',{hour12:false}):'';
+      return '<div class="trash-item"><div class="trash-item-main"><b>['+esc(WIKI_LABELS[t.cat]||t.cat)+'] '+esc(t.name)+'</b><span>'+esc(wikiExcerpt(t.desc,60))+'</span><em>删除于 '+esc(ts)+'</em></div><span class="trash-actions"><button class="cq-del" onclick="restoreTrashEntry(\''+attrEsc(t.cat)+'\',\''+attrEsc(t.name)+'\')">恢复</button><button class="cq-del" onclick="purgeTrashEntry(\''+attrEsc(t.cat)+'\',\''+attrEsc(t.name)+'\')">彻底删除</button></span></div>';
+    }).join('');
+    h+='</div>';
+    box.innerHTML=h;
+  }catch(e){ box.innerHTML='<div class="empty">加载失败：'+esc(e.message)+'</div>'; }
+}
+async function restoreTrashEntry(cat,name){
+  try{
+    var r=await fetch('/api/wiki/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cat:cat,name:name})});
+    var j=await r.json();
+    if(!j.ok)throw new Error(j.error||'恢复失败');
+    WIKI=null;WIKI_SUBS={};await loadWiki();
+    var found=null;(WIKI.categories[cat]||[]).forEach(function(x){if(x.name===name)found=x;});
+    openWikiTrash();
+    if(found)openCatalogueAt(cat,found);
+    toast('已恢复：'+name);
+  }catch(e){toast('恢复失败：'+e.message);}
+}
+async function purgeTrashEntry(cat,name){
+  if(!confirm('彻底删除「'+name+'」？此操作不可恢复。'))return;
+  try{
+    var r=await fetch('/api/wiki/trash-purge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cat:cat,name:name})});
+    var j=await r.json();
+    if(!j.ok)throw new Error(j.error||'删除失败');
+    openWikiTrash();
+    toast('已彻底删除');
+  }catch(e){toast('删除失败：'+e.message);}
+}

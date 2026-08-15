@@ -313,9 +313,9 @@ def _load_content():
 def wiki_all():
     _load_content()
     return {
-        "categories": {k: v for k, v in _wiki.items() if k != "其他"},
+        "categories": {k: v for k, v in _wiki.items() if k not in ("其他", "_deleted")},
         "other": _wiki.get("其他", []),
-        "stats": {k: len(v) for k, v in _wiki.items()},
+        "stats": {k: len(v) for k, v in _wiki.items() if k != "_deleted"},
     }
 
 
@@ -371,7 +371,12 @@ def wiki_update(req: WikiEntryReq):
         _content_mtime["wiki"] = None
         return {"ok": True, "cat": new_cat, "entry": entry, "created": True}
     if req.delete:
-        entries.pop(idx)
+        # 先进回收站，可恢复
+        import time as _time
+        entry = entries.pop(idx)
+        trash = [t for t in data.get("_deleted", []) if not (t.get("cat") == cat and t.get("name") == entry.get("name"))]
+        trash.append(dict(entry, cat=cat, deletedAt=round(_time.time())))
+        data["_deleted"] = trash
         if not entries:
             data.pop(cat, None)
     else:
@@ -403,6 +408,72 @@ def wiki_update(req: WikiEntryReq):
     if req.delete:
         return {"ok": True, "deleted": 1}
     return {"ok": True, "cat": req.cat or cat, "entry": entry}
+
+
+class WikiTrashReq(BaseModel):
+    cat: str
+    name: str
+
+
+@app.get("/api/wiki/trash")
+def wiki_trash_list():
+    """回收站：被删除的词条。"""
+    _load_content()
+    return {"items": list(_wiki.get("_deleted", []))}
+
+
+@app.post("/api/wiki/restore")
+def wiki_restore(req: WikiTrashReq):
+    """把回收站里的词条恢复到原分类。"""
+    _load_content()
+    path = config.BASE / "data" / "wiki.json"
+    if not path.is_file():
+        return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
+    trash = data.get("_deleted", [])
+    idx = next((i for i, t in enumerate(trash) if t.get("cat") == req.cat and t.get("name") == req.name), None)
+    if idx is None:
+        return JSONResponse({"ok": False, "error": "回收站中找不到该词条"}, status_code=404)
+    entry = dict(trash.pop(idx))
+    entry.pop("cat", None)
+    entry.pop("deletedAt", None)
+    target = [e for e in data.get(req.cat, []) if e.get("name") != entry.get("name")]
+    data[req.cat] = target
+    target.append(entry)
+    if not trash:
+        data.pop("_deleted", None)
+    try:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"写入资料库失败：{e}"}, status_code=500)
+    _content_mtime["wiki"] = None
+    return {"ok": True, "entry": entry}
+
+
+@app.post("/api/wiki/trash-purge")
+def wiki_trash_purge(req: WikiTrashReq):
+    """从回收站彻底删除（不可恢复）。"""
+    _load_content()
+    path = config.BASE / "data" / "wiki.json"
+    if not path.is_file():
+        return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
+    trash = [t for t in data.get("_deleted", []) if not (t.get("cat") == req.cat and t.get("name") == req.name)]
+    data["_deleted"] = trash
+    if not trash:
+        data.pop("_deleted", None)
+    try:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"写入资料库失败：{e}"}, status_code=500)
+    _content_mtime["wiki"] = None
+    return {"ok": True, "purged": 1}
 
 
 class QuizReq(BaseModel):
