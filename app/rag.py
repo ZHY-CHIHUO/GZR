@@ -56,6 +56,7 @@ class Store:
         for i, score in fused[:k]:
             m = dict(self.meta[i])
             m["_rrf"] = score
+            m["_idx"] = i
             out.append(m)
         return out
 
@@ -102,6 +103,8 @@ class Retriever:
             # 正文为主；摘要库小、库内排名不可跨库比较，仅作补位且需过相似度门槛
             n_need = max(1, k - 2) if scope == "all" else k
             merged = list(self.stores["novel"].search(qv, qt, n_need))
+            for h in merged:
+                h["_store"] = "novel"
             if "novel_sum" in self.stores:
                 seen = {(h.get("vol"), h.get("chapter")) for h in merged}
                 sum_sim = self.stores["novel_sum"].vectors @ qv
@@ -112,12 +115,14 @@ class Retriever:
                             continue
                         seen.add(key)
                         h["via_summary"] = True
+                        h["_store"] = "novel_sum"
                         merged.append(h)
                         break  # 只补一个摘要位
             hits.extend(merged[:n_need])
         if scope in ("all", "lore") and "lore" in self.stores:
             lore_hits = self.stores["lore"].search(qv, qt, k)
             if lore_hits:
+                lore_hits[0]["_store"] = "lore"
                 hits = hits[: max(0, k - 1)] + [lore_hits[0]]
         if scope in ("all", "lore") and "wiki" in self.stores:
             # 百科词条：相似度门槛，取最高 1 条（可与检索到的正文/设定互补）
@@ -126,6 +131,8 @@ class Retriever:
             if float(wsim[wi]) >= 0.40:
                 w = dict(self.stores["wiki"].meta[wi])
                 w["_sim"] = float(wsim[wi])
+                w["_idx"] = wi
+                w["_store"] = "wiki"
                 if not any(h.get("name") == w.get("name") and h.get("cat") == w.get("cat") for h in hits):
                     hits = hits[: max(0, k - 1)] + [w]
         for h in hits:

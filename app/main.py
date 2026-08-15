@@ -175,6 +175,27 @@ def _retry_extra(q, hits, scope):
     return extra
 
 
+def _web_back_to_rag(web_answer, q, scope):
+    """网络回答要点反哺资料库检索：用回答内容作查询再搜一次，
+    返回过相似度门槛的命中（供整合回答引用具体章节）。"""
+    try:
+        query = (q + " " + (web_answer or "")[:300]).strip() or q
+        hits = _force_wiki_hits(query, retriever.search(query, k=4, scope=scope))
+        qv = retriever._embed(query)
+        good = []
+        for h in hits:
+            st = retriever.stores.get(h.get("_store") or "novel")
+            idx = h.get("_idx")
+            if st is None or idx is None:
+                continue
+            sim = float(st.vectors[idx] @ qv)
+            if sim >= 0.42:
+                good.append(h)
+        return good[:3]
+    except Exception:
+        return []
+
+
 @app.post("/api/ask")
 def ask(req: AskReq):
     q = (req.question or "").strip()
@@ -188,6 +209,8 @@ def ask(req: AskReq):
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
     web_sources = []
     web_used = False
+    combined = False
+    extra_sources = []
     if config.KEY:
         try:
             answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
@@ -207,11 +230,25 @@ def ask(req: AskReq):
                 )
                 if web_answer:
                     web_used = True
-                    answer = "（资料库未检索到相关内容，以下为**网络检索回答**，请自行核对来源）\n\n" + web_answer
                     web_sources = [{
                         "type": "web", "label": f"网络来源{i + 1}", "url": c.get("url", ""),
                         "title": c.get("title", ""), "excerpt": c.get("title", ""),
                     } for i, c in enumerate(cites[:10])]
+                    # 网络回答要点反哺资料库检索：命中具体章节则整合回答
+                    extra = _web_back_to_rag(web_answer, q, req.scope)
+                    if extra:
+                        try:
+                            sys2, usr2 = build_prompt(q, extra, config.EXCERPT_CHARS)
+                            usr2 += "\n\n另附网络检索到的背景资料（仅供参考，不作为资料库依据）：\n" + web_answer[:600]
+                            merged = ask_llm(sys2, usr2, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
+                            if merged and merged.strip():
+                                combined = True
+                                answer = "（首次检索未命中，以下为结合资料库补充检索与网络检索的整合回答）\n\n" + merged
+                                extra_sources = [format_source(h) for h in extra]
+                        except Exception:
+                            combined = False
+                    if not combined:
+                        answer = "（资料库未检索到相关内容，以下为**网络检索回答**，请自行核对来源）\n\n" + web_answer
             except Exception:
                 web_sources = []
         mock = False
@@ -228,7 +265,9 @@ def ask(req: AskReq):
         while lines and lines[-1].strip().startswith("依据来源"):
             lines.pop()
         answer = "\n".join(lines).rstrip()
-    if web_used or gen_knowledge:
+    if combined:
+        shown_sources = extra_sources + web_sources
+    elif web_used or gen_knowledge:
         shown_sources = web_sources
     else:
         shown_sources = [format_source(h) for h in hits] + web_sources
@@ -238,7 +277,7 @@ def ask(req: AskReq):
         "cost_rmb": estimate_cost(system, user, answer) if not mock else 0.0,
         "mock": mock,
         "web": web_used,
-        "wiki_cites": [] if (web_used or gen_knowledge) else _wiki_cites_in(answer),
+        "wiki_cites": _wiki_cites_in(answer) if (combined or not web_used and not gen_knowledge) else [],
     }
 
 
