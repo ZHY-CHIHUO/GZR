@@ -11,7 +11,7 @@
   --accent2:#3A3A3A;  /* 墨灰 */
   --line:#DCDCDC;
   --ok:#3D7A4F;
-  --warn:#8A6D1A;
+  --warn:#555555;
 }
 body{
   font-family:"Songti SC","STSong","SimSun","PingFang SC","Microsoft YaHei",serif;
@@ -49,7 +49,7 @@ header{
 .pill{ border-radius:2px; letter-spacing:1px; }
 .pill.ok{ background:#EDF3E8; color:var(--ok); border:1px solid #CBDCC4; }
 .pill.no{ background:#FAEDE9; color:var(--accent); border:1px solid #E4C4BC; }
-.pill.warn{ background:#F7F0DF; color:var(--warn); border:1px solid #E4D2A8; }
+.pill.warn{ background:#F1F1F1; color:var(--warn); border:1px solid #D5D5D5; }
 .card, .msg.bot, .src-card, .wiki-item, .wiki-cat, .wiki-list, .wiki-detail,
 .read-pane .toc-pane, .read-pane .text-pane, .chat-main .toc-pane,
 .pdf-list, .modal, .game-body, .quiz-opt, .riddle-hint, .settings-wrap .card{
@@ -75,7 +75,7 @@ input, select, textarea{
 }
 .msg.user{ background:#2A2A2A; color:#F5F5F2; border-radius:4px 4px 2px 4px; }
 .msg.bot{ border-radius:4px 4px 4px 2px; }
-.hint-bot{ background:#F7F0DF; border-color:#E4D2A8; border-radius:4px; }
+.hint-bot{ background:#F6F6F6; border-color:#D8D8D8; border-radius:4px; }
 .src-label{ color:var(--accent); font-family:"KaiTi","STKaiti",serif; font-weight:600; letter-spacing:1px; }
 .cite{ color:var(--accent); border-bottom:1px dotted #C88F86; }
 .toc-node .toc-children{ border-left:1px solid #E8E8E8; }
@@ -91,7 +91,7 @@ input, select, textarea{
 .lore-h1{ border-left:4px solid #111; }
 .lore-h2{ border-left:3px solid #555; }
 .lore-h3{ border-left:2px solid #999; }
-.pdf-canvas-wrap{ background:#E9E9E6; }
+.pdf-canvas-wrap{ background:#E9E9E9; }
 .wiki-cat{ border:1px solid #DDD; border-radius:3px; }
 .wiki-cat.active{ background:#111; color:#F5F5F2; border-color:#111; }
 .wiki-item{ border-bottom:1px solid #EFEFEF; border-radius:0; box-shadow:none; }

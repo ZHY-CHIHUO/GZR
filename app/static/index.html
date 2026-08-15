@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/refine.css">
 <link rel="stylesheet" href="/static/ink.css">
+<link rel="stylesheet" href="/static/wiki-browser.css">
 <script src="/static/pdfjs/pdf.min.js"></script>
 </head>
 <body>
@@ -83,23 +84,38 @@
 
   <!-- 百科 -->
   <section id="tab-wiki" class="panel" hidden>
-    <div class="wiki-wrap">
-      <aside class="wiki-side" aria-label="百科分类">
-        <div class="wiki-kicker">蛊箓百科</div>
-        <label class="wiki-search-label" for="wiki-search">搜索百科</label>
-        <input id="wiki-search" type="search" placeholder="搜索条目" autocomplete="off">
-        <div id="wiki-cats"></div>
-      </aside>
-      <article class="wiki-detail" id="wiki-detail" aria-live="polite">
-        <div class="empty">选择一个条目开始阅读</div>
-      </article>
-      <aside class="wiki-index" aria-label="当前分类条目">
-        <div class="wiki-index-head">
-          <div class="wiki-index-title">条目索引</div>
-          <div class="wiki-result-count" id="wiki-result-count"></div>
+    <div class="wiki-browser" id="wiki-browser">
+      <section class="wiki-home" id="wiki-home" aria-label="蛊箓百科首页">
+        <div class="wiki-hero">
+          <div class="wiki-hero-mark" aria-hidden="true">蛊</div>
+          <p class="wiki-overline">GU LU · KNOWLEDGE ARCHIVE</p>
+          <h1>蛊箓百科</h1>
+          <p class="wiki-hero-copy">从人物、蛊虫到势力与仙蛊屋，检索《蛊真人》的设定资料。</p>
+          <form class="wiki-searchbox" id="wiki-search-form" role="search">
+            <label class="sr-only" for="wiki-search">搜索百科条目</label>
+            <input id="wiki-search" type="search" placeholder="搜索人物、蛊虫、势力、杀招……" autocomplete="off">
+            <button type="submit">搜索</button>
+          </form>
+          <div class="wiki-shortcuts" id="wiki-shortcuts" aria-label="快捷搜索"></div>
         </div>
-        <div class="wiki-list" id="wiki-list"><div class="empty">选择分类查看条目</div></div>
-      </aside>
+        <div class="wiki-home-body">
+          <section class="wiki-category-section" aria-labelledby="wiki-category-title">
+            <div class="wiki-section-head"><div><p class="wiki-overline">EXPLORE</p><h2 id="wiki-category-title">浏览分类</h2></div><span id="wiki-total-count" class="wiki-total-count"></span></div>
+            <div class="wiki-category-grid" id="wiki-cats"></div>
+          </section>
+          <section class="wiki-feature-section" aria-labelledby="wiki-feature-title">
+            <div class="wiki-section-head"><div><p class="wiki-overline">FROM THE ARCHIVE</p><h2 id="wiki-feature-title">随机阅览</h2></div><button class="wiki-text-button" id="wiki-refresh-feature" type="button">换一批</button></div>
+            <div class="wiki-feature-grid" id="wiki-feature-list"></div>
+          </section>
+        </div>
+      </section>
+      <section class="wiki-results" id="wiki-results" hidden aria-live="polite">
+        <div class="wiki-results-top"><button class="wiki-back" id="wiki-back-home" type="button">返回百科首页</button><form class="wiki-mini-search" id="wiki-mini-search-form" role="search"><label class="sr-only" for="wiki-mini-search">搜索百科条目</label><input id="wiki-mini-search" type="search" autocomplete="off"><button type="submit">搜索</button></form></div>
+        <div class="wiki-results-heading"><p class="wiki-overline" id="wiki-results-overline">CATALOGUE</p><h2 id="wiki-result-title">条目目录</h2><p id="wiki-result-count" class="wiki-result-count"></p></div>
+        <div class="wiki-filter-row" id="wiki-subs"></div>
+        <div class="wiki-result-grid" id="wiki-list"></div>
+      </section>
+      <article class="wiki-detail" id="wiki-detail" hidden aria-live="polite"></article>
     </div>
   </section>
 
@@ -212,5 +228,6 @@
 <div id="toast"></div>
 
 <script src="/static/app.js"></script>
+<script src="/static/wiki-browser.js"></script>
 </body>
 </html>

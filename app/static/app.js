@@ -69,7 +69,7 @@ function renderGuide(){
   if (HEALTH && HEALTH.ok && !HEALTH.has_key && !exists){
     var d = document.createElement('div');
     d.id='no-key-guide'; d.className='hint-bot';
-    d.innerHTML = '🔌 还没连接 AI：现在只能看到「检索结果」，不能生成回答。' +
+    d.innerHTML = '还没连接 AI：现在只能看到「检索结果」，不能生成回答。' +
       '<button onclick="switchTab(\'settings\')">去设置连接 AI</button>';
     chat.insertBefore(d, chat.firstChild);
   }
@@ -142,12 +142,12 @@ function renderSuggest(){
   box.appendChild(t1);
   SUGGEST.forEach(function(s){
     var c = document.createElement('span');
-    c.className='chip'; c.textContent='💡 '+s;
+    c.className='chip'; c.textContent=''+s;
     c.onclick = function(){ $('q').value=s; ask(); };
     box.appendChild(c);
   });
   var t2 = document.createElement('div'); t2.className='suggest-label suggest-label-spaced';
-  t2.textContent = '👤 角色速查（点击提问）：';
+  t2.textContent = '角色速查（点击提问）：';
   box.appendChild(t2);
   CHARS.forEach(function(name){
     var c = document.createElement('span');
@@ -200,8 +200,8 @@ function renderSources(sources){
     html += '<div class="src-card">' +
       '<div class="src-head"><span class="src-label">'+esc(s.label)+'</span>' +
       (s.type==='lore'
-        ? '<button class="src-btn" data-act="lore-read" data-sec="'+attrEsc(s.title||s.section||'')+'">📖 阅读原文</button>'
-        : '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">📖 阅读原文</button>') +
+        ? '<button class="src-btn" data-act="lore-read" data-sec="'+attrEsc(s.title||s.section||'')+'">阅读原文</button>'
+        : '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">阅读原文</button>') +
       '</div></div>';
   });
   return html;
@@ -563,7 +563,7 @@ function renderPdfLists(pdfs){
                  pdfs.find(function(p){ return p.group === '插图版'; });
   var pane = $('read-pdf');
   pane.innerHTML = '<div class="toc-pane" id="pdf-toc-pane">' +
-    '<div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="togglePdfToc()">«</button></div>' +
+    '<div class="toc-head"><span class="toc-title">目录</span><button class="toc-fold" onclick="togglePdfToc()">«</button></div>' +
     '<div class="toc-body" id="pdf-toc-body"></div></div>' +
     '<div class="text-pane"><div class="pdf-view"><div class="empty">选择左侧章节查看</div></div></div>';
   $('pdf-toc-body').innerHTML = combined ? renderPdfList(combined, PDF_CHS, 'pdf') : '<div class="empty">未找到 PDF</div>';
@@ -572,7 +572,7 @@ function renderPdfLists(pdfs){
   var rzPdf = pdfs.find(function(p){ return p.group === '人祖传'; });
   if (rzPdf){
     rz.innerHTML = '<div class="toc-pane" id="rz-toc-pane">' +
-      '<div class="toc-head"><span class="toc-title">📑 目录</span><button class="toc-fold" onclick="toggleRzToc()">«</button></div>' +
+      '<div class="toc-head"><span class="toc-title">目录</span><button class="toc-fold" onclick="toggleRzToc()">«</button></div>' +
       '<div class="toc-body" id="rz-toc-body"></div></div>' +
       '<div class="text-pane"><div class="pdf-view"><div class="empty">选择左侧章节查看</div></div></div>';
     $('rz-toc-body').innerHTML = renderPdfList(rzPdf, RZ_CHS, 'rz');
@@ -627,9 +627,9 @@ async function saveAndTest(){
     if (!saveResponse.ok || !saved.ok) throw new Error(saved.error||('HTTP '+saveResponse.status));
 
     result.className='result ok';
-    result.textContent = '✅ 连接成功并已保存：' + (t.models||[model]).join('、');
+    result.textContent = '连接成功并已保存：' + (t.models||[model]).join('、');
     await refreshHealth();
-  } catch(e){ result.className='result err'; result.textContent='❌ 请求出错：'+e.message; }
+  } catch(e){ result.className='result err'; result.textContent='请求出错：'+e.message; }
 }
 async function clearKey(){
   var result = $('key-result');
@@ -668,11 +668,11 @@ async function saveEmbedModel(){
   try {
     var j = await (await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({embed_model: id})})).json();
     if (j.ok){
-      res.className='result ok'; res.textContent='✅ 已切换为：' + j.data_dir + '（'+ j.embed_model +'）';
+      res.className='result ok'; res.textContent='已切换为：' + j.data_dir + '（'+ j.embed_model +'）';
       toast('检索模型已切换');
       refreshHealth();
-    } else { res.className='result err'; res.textContent='❌ 切换失败：' + (j.error||'未知错误'); }
-  } catch(e){ res.className='result err'; res.textContent='❌ 请求出错：'+e.message; }
+    } else { res.className='result err'; res.textContent='切换失败：' + (j.error||'未知错误'); }
+  } catch(e){ res.className='result err'; res.textContent='请求出错：'+e.message; }
 }
 
 /* ---------- 百科 ---------- */
@@ -875,7 +875,7 @@ async function startQuiz(){
 function renderQuizQ(){
   if (QUIZ_IDX >= QUIZ_QS.length){
     var s = quizScore(); localStorage.setItem('gzr.quizTotal', s.t); localStorage.setItem('gzr.quizCorrect', s.c);
-    $('quiz-body').innerHTML = '<div class="empty">🎉 本组完成：答对 <b>'+QUIZ_RIGHT+'/'+QUIZ_QS.length+'</b><br><br><button class="btn btn-primary" onclick="startQuiz()">再来一组</button></div>';
+    $('quiz-body').innerHTML = '<div class="empty">本组完成：答对 <b>'+QUIZ_RIGHT+'/'+QUIZ_QS.length+'</b><br><br><button class="btn btn-primary" onclick="startQuiz()">再来一组</button></div>';
     updateQuizScore(); return;
   }
   var q = QUIZ_QS[QUIZ_IDX];
@@ -895,7 +895,7 @@ function answerQuiz(i){
   localStorage.setItem('gzr.quizTotal', s.t); localStorage.setItem('gzr.quizCorrect', s.c);
   updateQuizScore();
   var fb = $('quiz-fb');
-  fb.innerHTML = (right ? '✅ 答对了！' : '❌ 答错了，正确答案：<b>'+esc(q.options[q.answer])+'</b>') +
+  fb.innerHTML = (right ? '答对了！' : '答错了，正确答案：<b>'+esc(q.options[q.answer])+'</b>') +
     '<br><span class="quiz-exp">'+esc(q.explain)+'</span>' +
     '<br><br><button class="btn btn-primary" onclick="renderQuizQ()">'+(QUIZ_IDX < QUIZ_QS.length-1 ? '下一题 →' : '查看成绩')+'</button>';
   document.querySelectorAll('.quiz-opt').forEach(function(b){
@@ -906,7 +906,7 @@ function answerQuiz(i){
 }
 
 /* ---------- 游戏：猜谜 ---------- */
-var RIDDLE = null, RIDDLE_IDX = 0, RIDDLE_TYPE = 'gu', RIDDLE_LABEL = '🐛 猜蛊虫';
+var RIDDLE = null, RIDDLE_IDX = 0, RIDDLE_TYPE = 'gu', RIDDLE_LABEL = '猜蛊虫';
 function riddleScore(){ return +(localStorage.getItem('gzr.riddleScore')||0); }
 function updateRiddleScore(){ $('riddle-score').textContent = '累计 ' + riddleScore() + ' 分'; }
 async function newRiddle(){
@@ -921,7 +921,7 @@ function renderRiddle(){
   var html = '<div class="riddle-hints">';
   for (var i=0; i<=RIDDLE_IDX; i++) html += '<div class="riddle-hint">提示'+(i+1)+'：'+esc(RIDDLE.hints[i])+'</div>';
   html += '</div>';
-  if (RIDDLE_IDX < 2) html += '<br><button class="btn btn-ghost" onclick="moreHint()">💡 更多提示（-1分）</button>';
+  if (RIDDLE_IDX < 2) html += '<br><button class="btn btn-ghost" onclick="moreHint()">更多提示（-1分）</button>';
   html += '<div class="riddle-ask"><input id="riddle-input" placeholder="输入你的答案…" autocomplete="off"><button class="btn btn-primary" onclick="guessRiddle()">猜！</button></div>';
   html += '<div id="riddle-fb"></div>';
   $('riddle-body').innerHTML = html;
@@ -944,11 +944,11 @@ function guessRiddle(){
     var pts = [3,2,1][RIDDLE_IDX] || 1;
     localStorage.setItem('gzr.riddleScore', riddleScore() + pts);
     updateRiddleScore();
-    fb.innerHTML = '🎉 猜对了！+'+pts+'分　答案：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
+    fb.innerHTML = '猜对了！+'+pts+'分　答案：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
   } else if (RIDDLE_IDX >= 2){
-    fb.innerHTML = '😅 没猜中，答案是：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
+    fb.innerHTML = '没猜中，答案是：<b>'+esc(RIDDLE.name)+'</b><br><br><button class="btn btn-primary" onclick="newRiddle()">再来一道</button>';
   } else {
-    fb.innerHTML = '❌ 不对，再想想（可用「更多提示」）';
+    fb.innerHTML = '不对，再想想（可用「更多提示」）';
     moreHint();
   }
 }
@@ -1003,7 +1003,7 @@ document.querySelectorAll('.rtab[data-gt]').forEach(function(btn){
     $('game-riddle').hidden = (gt === 'quiz');
     if (gt !== 'quiz'){
       RIDDLE_TYPE = gt.replace('riddle-', '');
-      $('riddle-label').textContent = {'gu':'🐛 猜蛊虫','person':'👤 猜人物','item':'🎁 猜物品'}[RIDDLE_TYPE] || gt;
+      $('riddle-label').textContent = {'gu':'猜蛊虫','person':'猜人物','item':'猜物品'}[RIDDLE_TYPE] || gt;
     }
   });
 });
@@ -1031,7 +1031,7 @@ function renderChatNavList(){
   });
   var html = active.map(function(it){ return navItemHtml(it, meta); }).join('');
   if (archived.length){
-    html += '<details class="nav-arch"><summary>🗂 已归档（' + archived.length + '）</summary>' +
+    html += '<details class="nav-arch"><summary>已归档（' + archived.length + '）</summary>' +
       archived.map(function(it){ return navItemHtml(it, meta, true); }).join('') + '</details>';
   }
   $('chat-nav-list').innerHTML = html || '<div class="empty" style="padding:12px">暂无记录</div>';
