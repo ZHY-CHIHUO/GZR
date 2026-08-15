@@ -16,8 +16,13 @@ from app.config import DATA_DIR, MODEL_CACHE  # noqa: E402
 def main():
     src = os.path.join(str(DATA_DIR), "summaries.json")
     if not os.path.isfile(src):
-        print("没有 data/summaries.json，先运行生成脚本")
-        sys.exit(1)
+        # 摘要数据与向量模型无关，回退到默认 data/ 目录
+        alt = os.path.join(os.path.dirname(str(DATA_DIR)), "data", "summaries.json")
+        if os.path.isfile(alt):
+            src = alt
+        else:
+            print("没有 summaries.json，先运行生成脚本")
+            sys.exit(1)
     items = json.load(open(src, encoding="utf-8"))
     print(f"summaries: {len(items)}")
 
