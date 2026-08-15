@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config, library
@@ -31,6 +32,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="蛊真人 RAG", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
 class AskReq(BaseModel):
