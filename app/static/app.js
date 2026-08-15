@@ -189,12 +189,19 @@ function renderSources(sources){
   if (!sources || !sources.length) return '';
   var html = '';
   sources.forEach(function(s){
+    var btn = '';
+    if (s.type === 'wiki'){
+      btn = '<button class="src-btn" data-act="wiki" data-name="'+attrEsc(s.name)+'">查看词条</button>';
+    } else if (s.type === 'lore'){
+      btn = '<button class="src-btn" data-act="lore-read" data-sec="'+attrEsc(s.title||s.section||'')+'">阅读原文</button>';
+    } else {
+      btn = '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">阅读原文</button>';
+    }
     html += '<div class="src-card">' +
       '<div class="src-head"><span class="src-label">'+esc(s.label)+'</span>' +
-      (s.type==='lore'
-        ? '<button class="src-btn" data-act="lore-read" data-sec="'+attrEsc(s.title||s.section||'')+'">阅读原文</button>'
-        : '<button class="src-btn" data-act="read" data-vol="'+attrEsc(s.vol)+'" data-ch="'+s.chapter+'">阅读原文</button>') +
-      '</div></div>';
+      btn +
+      '</div>' +
+      '<p class="src-excerpt">'+esc(s.excerpt)+'</p></div>';
   });
   return html;
 }
@@ -252,6 +259,9 @@ $('chat').addEventListener('click', function(ev){
   }
   else if (btn.dataset.act === 'lore-read'){
     gotoLoreSection(btn.dataset.sec);
+  }
+  else if (btn.dataset.act === 'wiki'){
+    openWikiByName(btn.dataset.name);
   }
 });
 

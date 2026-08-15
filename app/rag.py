@@ -69,7 +69,7 @@ class Retriever:
             info = json.load(f)
         self.model_name = info["model"]
         self.stores = {}
-        for name in ("novel", "lore", "novel_sum"):
+        for name in ("novel", "lore", "novel_sum", "wiki"):
             p = os.path.join(self.data_dir, name)
             if os.path.isdir(p) and os.path.isfile(os.path.join(p, "vectors.npy")):
                 self.stores[name] = Store(p)
@@ -93,14 +93,15 @@ class Retriever:
         return v / (np.linalg.norm(v) + 1e-9)
 
     def search(self, query, k=None, scope="all"):
-        """scope: all=正文+设定, novel=仅正文(+摘要), lore=仅设定"""
+        """scope: all=正文+设定+百科, novel=仅正文(+摘要), lore=仅设定+百科"""
         k = k or self.top_k
         qv = self._embed(query)
         qt = bigram_tokens(query)
         hits = []
         if scope in ("all", "novel") and "novel" in self.stores:
-            # 正文为主（前 k-1 位）；摘要库小、库内排名不可跨库比较，仅作补位且需过相似度门槛
-            merged = list(self.stores["novel"].search(qv, qt, max(1, k - 1)))
+            # 正文为主；摘要库小、库内排名不可跨库比较，仅作补位且需过相似度门槛
+            n_need = max(1, k - 2) if scope == "all" else k
+            merged = list(self.stores["novel"].search(qv, qt, n_need))
             if "novel_sum" in self.stores:
                 seen = {(h.get("vol"), h.get("chapter")) for h in merged}
                 sum_sim = self.stores["novel_sum"].vectors @ qv
@@ -113,11 +114,20 @@ class Retriever:
                         h["via_summary"] = True
                         merged.append(h)
                         break  # 只补一个摘要位
-            hits.extend(merged[:k])
+            hits.extend(merged[:n_need])
         if scope in ("all", "lore") and "lore" in self.stores:
             lore_hits = self.stores["lore"].search(qv, qt, k)
             if lore_hits:
                 hits = hits[: max(0, k - 1)] + [lore_hits[0]]
+        if scope in ("all", "lore") and "wiki" in self.stores:
+            # 百科词条：相似度门槛，取最高 1 条（可与检索到的正文/设定互补）
+            wsim = self.stores["wiki"].vectors @ qv
+            wi = int(np.argmax(wsim))
+            if float(wsim[wi]) >= 0.40:
+                w = dict(self.stores["wiki"].meta[wi])
+                w["_sim"] = float(wsim[wi])
+                if not any(h.get("name") == w.get("name") and h.get("cat") == w.get("cat") for h in hits):
+                    hits = hits[: max(0, k - 1)] + [w]
         for h in hits:
             h.setdefault("store", "novel")
         return hits[:k]
@@ -125,6 +135,13 @@ class Retriever:
 
 def format_source(h):
     excerpt = (h.get("text") or "")[:200]
+    if h.get("type") == "wiki":
+        return {
+            "type": "wiki",
+            "label": f"百科词条《{h.get('name')}》",
+            "name": h.get("name"), "cat": h.get("cat"),
+            "title": h.get("name"), "excerpt": excerpt,
+        }
     if h.get("type") == "lore":
         return {
             "type": "lore",
@@ -145,7 +162,9 @@ def format_source(h):
 def build_prompt(question, hits, excerpt_chars=600):
     refs = []
     for i, h in enumerate(hits, 1):
-        if h.get("type") == "lore":
+        if h.get("type") == "wiki":
+            label = f"百科词条《{h.get('name')}》"
+        elif h.get("type") == "lore":
             label = f"设定集《{h.get('section') or h.get('title')}》"
         else:
             label = f"正文《{h.get('vol')}·第{h.get('chapter')}章·{h.get('title')}》"
@@ -166,7 +185,9 @@ def build_prompt(question, hits, excerpt_chars=600):
 def mock_answer(hits):
     lines = ["（测试模式：未配置 DEEPSEEK_API_KEY，仅展示检索结果）", "检索到以下相关来源："]
     for i, h in enumerate(hits, 1):
-        if h.get("type") == "lore":
+        if h.get("type") == "wiki":
+            lines.append(f"{i}. 百科词条《{h.get('name')}》")
+        elif h.get("type") == "lore":
             lines.append(f"{i}. 设定集《{h.get('section') or h.get('title')}》")
         else:
             lines.append(f"{i}. {h.get('vol')}·第{h.get('chapter')}章·{h.get('title')}")
