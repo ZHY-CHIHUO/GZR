@@ -105,6 +105,64 @@ def health():
     }
 
 
+_RETRY_MARKS = ("未查到", "未找到", "没有找到", "没有检索到", "未检索到", "资料中未提及", "资料中未记载", "未能查到", "无法确认", "没有收录")
+
+
+def _force_wiki_hits(q, hits, limit=3):
+    """问题中出现的百科词条名，强制加入参考资料（不依赖向量相似度）。"""
+    try:
+        cites = _wiki_cites_in(q, limit=limit)
+    except Exception:
+        cites = []
+    if not cites:
+        return hits
+    out = list(hits)
+    for c in cites:
+        entry = None
+        for e in (_wiki.get(c.get("cat")) or []):
+            if e.get("name") == c.get("name"):
+                entry = e
+                break
+        if entry is None:
+            for _cat, items in (_wiki or {}).items():
+                for e in items:
+                    if e.get("name") == c.get("name"):
+                        entry = e
+                        break
+                if entry:
+                    break
+        if entry is None:
+            continue
+        hit = {
+            "type": "wiki", "name": c.get("name"), "cat": c.get("cat"),
+            "section": entry.get("section", ""), "sub": entry.get("sub", ""),
+            "text": entry.get("desc", ""),
+        }
+        if not any(h.get("type") == "wiki" and h.get("name") == c.get("name") for h in out):
+            out.append(hit)
+    return out
+
+
+def _retry_extra(q, hits, scope):
+    """补救检索：用问题中出现的词条名在正文/设定里再找相关片段。"""
+    try:
+        cites = _wiki_cites_in(q, limit=5)
+    except Exception:
+        cites = []
+    extra = []
+    for c in cites[:3]:
+        try:
+            for h in retriever.search(c.get("name", ""), k=3, scope=scope):
+                if h.get("type") == "wiki":
+                    continue
+                if any(x.get("title") == h.get("title") and x.get("vol") == h.get("vol") for x in hits + extra):
+                    continue
+                extra.append(h)
+        except Exception:
+            continue
+    return extra
+
+
 @app.post("/api/ask")
 def ask(req: AskReq):
     q = (req.question or "").strip()
@@ -112,13 +170,27 @@ def ask(req: AskReq):
         return JSONResponse({"error": "问题不能为空"}, status_code=400)
     if retriever is None:
         return JSONResponse({"error": "检索库未加载"}, status_code=503)
-    hits = retriever.search(q, scope=req.scope)
+    hits = _force_wiki_hits(q, retriever.search(q, scope=req.scope))
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
+    retried = False
     if config.KEY:
         try:
             answer = ask_llm(system, user, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
         except Exception as e:
             return JSONResponse({"error": f"AI 调用失败：{e}"}, status_code=502)
+        # 首答说"未查到" -> 补充检索一轮再答
+        if any(m in answer for m in _RETRY_MARKS):
+            extra = _retry_extra(q, hits, req.scope)
+            if extra:
+                hits2 = hits + extra
+                system2, user2 = build_prompt(q, hits2, config.EXCERPT_CHARS)
+                try:
+                    answer = ask_llm(system2, user2, config.KEY, config.BASE_URL, config.MODEL, history=req.history)
+                    retried = True
+                    hits = hits2
+                    system, user = system2, user2
+                except Exception:
+                    retried = False
         mock = False
     else:
         answer = mock_answer(hits)
@@ -128,6 +200,7 @@ def ask(req: AskReq):
         "sources": [format_source(h) for h in hits],
         "cost_rmb": estimate_cost(system, user, answer) if not mock else 0.0,
         "mock": mock,
+        "retried": retried,
         "wiki_cites": _wiki_cites_in(answer),
     }
 
