@@ -770,20 +770,36 @@ async function loadLibrary(){
       det.appendChild(sum);
       var list = document.createElement('div');
       list.className = 'toc-children';
-      v.chapters.forEach(function(c){
-        var it = document.createElement('div');
-        it.className = 'toc-leaf';
-        var dot = document.createElement('span');
-        dot.className = 'toc-dot';
-        var link = document.createElement('span');
-        link.className = 'toc-link';
-        link.textContent = (c.n ? ('第'+c.n+'章 · ') : '') + stripSec(c.title);
-        link.setAttribute('data-vol', v.name);
-        link.setAttribute('data-ch', c.n);
-        it.appendChild(dot);
-        it.appendChild(link);
-        list.appendChild(it);
-      });
+      // 每 20 章一个分组
+      for (var gi = 0; gi < v.chapters.length; gi += 20){
+        var chunk = v.chapters.slice(gi, gi + 20);
+        var grp = document.createElement('details');
+        grp.className = 'toc-node lv2';
+        var gsum = document.createElement('summary');
+        var gs = document.createElement('span');
+        gs.className = 'toc-link';
+        gs.textContent = '第' + (chunk[0].n || 1) + '~' + (chunk[chunk.length - 1].n || '') + '章';
+        gsum.appendChild(gs);
+        grp.appendChild(gsum);
+        var glist = document.createElement('div');
+        glist.className = 'toc-children';
+        chunk.forEach(function(c){
+          var it = document.createElement('div');
+          it.className = 'toc-leaf';
+          var dot = document.createElement('span');
+          dot.className = 'toc-dot';
+          var link = document.createElement('span');
+          link.className = 'toc-link';
+          link.textContent = (c.n ? ('第'+c.n+'章 · ') : '') + stripSec(c.title);
+          link.setAttribute('data-vol', v.name);
+          link.setAttribute('data-ch', c.n);
+          it.appendChild(dot);
+          it.appendChild(link);
+          glist.appendChild(it);
+        });
+        grp.appendChild(glist);
+        list.appendChild(grp);
+      }
       det.appendChild(list);
       toc.appendChild(det);
     });
@@ -810,7 +826,12 @@ async function showChapter(vol, ch){
       if (list[i].textContent.indexOf(vol)===0){
         list[i].open = true;
         var items = list[i].querySelectorAll('.toc-leaf .toc-link');
-        var target = items[ch-1]; if (target) target.classList.add('cur');
+        var target = items[ch-1];
+        if (target){
+          target.classList.add('cur');
+          var grp = target.closest('.toc-node');
+          if (grp) grp.open = true;  // 展开当前章所在分组
+        }
         break;
       }
     }
