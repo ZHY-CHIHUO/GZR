@@ -477,6 +477,7 @@ function saveChat(){
   var msgs = [];
   document.querySelectorAll('#chat .msg').forEach(function(m){
     if (m.id === 'no-key-guide') return;
+    if (m.textContent.trim() === '思考中…') return;
     msgs.push({cls: m.className.replace('msg ',''), html: m.innerHTML});
   });
   if (msgs.length > 40) msgs = msgs.slice(-40);
@@ -543,7 +544,7 @@ async function ask(){
     d.innerHTML = body + renderSources(shown) + cost;
     HISTORY.push({role:'assistant', content: j.answer});
   } catch(e){ d.textContent = '请求失败：'+e.message; }
-  finally { $('send').disabled = false; $('q').focus(); }
+  finally { $('send').disabled = false; $('q').focus(); saveChat(); }
 }
 $('send').onclick = ask;
 $('q').addEventListener('keydown', function(e){ if (e.key==='Enter') ask(); });
