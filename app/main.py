@@ -68,9 +68,17 @@ def serve_file(path: str):
     target = (root / path).resolve()
     if not str(target).startswith(str(root)) or not target.is_file():
         raise HTTPException(404, "文件不存在")
-    # 不带 filename：避免 Content-Disposition: attachment，让浏览器内嵌渲染 PDF
-    # no-store：防止浏览器缓存旧版本的 attachment 响应
-    return FileResponse(target, media_type="application/pdf", headers={"Cache-Control": "no-store"})
+    # 显式 inline：让浏览器内嵌渲染而不是下载；no-store 防止缓存旧响应
+    import urllib.parse as _up
+    safe = _up.quote(target.name)
+    return FileResponse(
+        target,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{safe}",
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 # ---------- 问答 ----------

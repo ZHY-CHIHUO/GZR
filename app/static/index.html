@@ -633,7 +633,7 @@ function renderPdfLists(pdfs){
   var rz = $('read-rz');
   var rzPdf = (byGroup['人祖传']||[])[0];
   rz.innerHTML = rzPdf
-    ? '<div class="pdf-view" style="flex:1"><iframe src="'+rzPdf.url+'"></iframe></div>'
+    ? '<div class="pdf-view" style="flex:1"><iframe src="'+rzPdf.url+'?_t='+Date.now()+'"></iframe></div>'
     : '<div class="empty">未找到人祖传 PDF</div>';
   pane.dataset.loaded = '1';
 }

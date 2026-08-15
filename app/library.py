@@ -145,20 +145,42 @@ def lore_html():
         else:
             merged.append((t, s))
 
-    def is_heading(t, style):
-        if style and ("Heading" in style or "标题" in style):
+    # 一级大节名（docx 无样式层级，用内容启发式分级）
+    L1_KEYWORDS = ("蛊虫百科", "百科内容", "作品简介", "作品目录", "作品设定", "背景设定",
+                   "世界观", "修行体系", "流派", "人物图鉴", "势力分布", "仙蛊屋全集", "仙蛊屋",
+                   "灾劫资料", "杀招体系", "荒兽", "人祖传", "尊者", "语录", "金句", "访谈",
+                   "资料统计", "蛊仙数据", "奇蛊榜", "仙蛊榜", "魔蛊榜", "境界", "蛊师相关")
+
+    def looks_like_body(t):
+        """内容像正文（编号行/长句/句末标点）的行，即使带标题样式也不算标题。"""
+        if re.match(r"^\d+[\.、]\s*", t):
             return True
+        if len(t) > 30:
+            return True
+        if t.endswith(("。", "，", "！", "？", "；", "、", "：", ":")):
+            return True
+        return False
+
+    def heading_level(t, style):
+        """返回 1/2/None（None=非标题）。样式优先，内容校验兜底。"""
+        if style:
+            if "Heading 1" in style or "标题 1" in style:
+                return None if looks_like_body(t) else 1
+            if "Heading" in style or "标题" in style:
+                return None if looks_like_body(t) else 2
+        if looks_like_body(t):
+            return None
         if len(t) < 2 or len(t) > 24:
-            return False
+            return None
         if t.startswith(("【", "[", "（", "(")):
-            return False
+            return None
         if re.fullmatch(r"[\]\]）\)\-—=·\s]+", t):
-            return False
+            return None
         if "：" in t or ":" in t:
-            return False
-        if t.endswith(("。", "！", "？", "；", "，", "、")):
-            return False
-        return True
+            return None
+        if any(k in t for k in L1_KEYWORDS) and len(t) <= 14:
+            return 1
+        return 2
 
     parts = ["<h1>《蛊真人》资料合集</h1>"]
     toc = []
@@ -166,20 +188,30 @@ def lore_html():
     seen_toc = set()
     for p, style in merged:
         e = html.escape(p)
-        if is_heading(p, style):
+        lv = heading_level(p, style)
+        if lv:
             idx += 1
             anchor = f"sec{idx}"
             if e not in seen_toc:
                 seen_toc.add(e)
-                toc.append(f'<a href="#{anchor}">{e}</a>')
-            parts.append(f'<h2 id="{anchor}">{e}</h2>')
+                cls = "toc-l1" if lv == 1 else "toc-l2"
+                toc.append(f'<a class="{cls}" href="#{anchor}">{e}</a>')
+            cls = "l1" if lv == 1 else "l2"
+            parts.append(f'<h2 class="{cls}" id="{anchor}">{e}</h2>')
         else:
             parts.append(f"<p>{e}</p>")
     _lore_html_cache = (
-        "<style>body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;line-height:1.9;max-width:860px;margin:0 auto;padding:24px}"
-        "h1{font-size:22px}h2{font-size:17px;margin-top:28px;border-left:4px solid #b08d57;padding-left:10px}"
-        "p{margin:8px 0;color:#333}.toc{font-size:13px;columns:2;column-gap:32px;background:#faf7f0;padding:12px 16px;border-radius:8px}"
-        ".toc a{display:block;color:#7a5c3e;text-decoration:none;margin:2px 0}</style>"
-        '<div class="toc">' + "".join(toc) + "</div>" + "".join(parts)
+        "<style>body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;line-height:1.9;margin:0;background:#f5f3ee}"
+        "#toc{position:fixed;left:0;top:0;bottom:0;width:230px;overflow-y:auto;background:#fffdf7;border-right:1px solid #e5e0d6;padding:14px 10px;font-size:12px}"
+        "#toc h3{font-size:13px;margin:0 0 8px 6px;color:#7a5c3e}"
+        "#toc a{display:block;color:#7a5c3e;text-decoration:none;margin:2px 0;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"
+        "#toc a:hover{background:#f0e9da;border-radius:4px}"
+        "#toc .toc-l1{font-weight:700;margin-top:8px;color:#5a4530}"
+        "#toc .toc-l2{padding-left:10px;color:#8a8577}"
+        "#content{margin-left:250px;max-width:860px;padding:24px 32px 60px;background:#fff;min-height:100vh}"
+        "h1{font-size:22px}h2.l1{font-size:18px;margin-top:32px;border-left:4px solid #7a5c3e;padding-left:10px}"
+        "h2.l2{font-size:15px;margin-top:22px;color:#5a4530;border-left:3px solid #b08d57;padding-left:8px}"
+        "p{margin:8px 0;color:#333}</style>"
+        '<div id="toc"><h3>📑 目录</h3>' + "".join(toc) + "</div>" + '<div id="content">' + "".join(parts) + "</div>"
     )
     return _lore_html_cache
