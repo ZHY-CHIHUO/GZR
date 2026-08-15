@@ -499,7 +499,7 @@ function renderGuide(){
   }
   if (HEALTH && HEALTH.ok && HEALTH.has_key && exists){ var g=$('no-key-guide'); if(g) g.remove(); }
 }
-function stripSec(t){ return String(t||'').replace(/^第[一二三四五六七八九十百0-9]+节[：:]\s*/, ''); }
+function stripSec(t){ return String(t||'').replace(/^第[零一二三四五六七八九十百0-9两]+节[：:]\s*/, ''); }
 function toggleToc(){
   var t = $('novel-toc');
   t.classList.toggle('collapsed');
@@ -523,6 +523,14 @@ $('lore-toc').querySelector('.toc-body').addEventListener('click', function(ev){
     ev.stopPropagation();
     var a = el.getAttribute('data-anchor');
     if (a) scrollToLore(a);
+  }
+});
+$('read-novel').querySelector('.toc-body').addEventListener('click', function(ev){
+  var el = ev.target;
+  if (el.classList && el.classList.contains('toc-link') && el.getAttribute('data-vol')){
+    ev.preventDefault();
+    ev.stopPropagation();
+    showChapter(el.getAttribute('data-vol'), parseInt(el.getAttribute('data-ch'), 10));
   }
 });
 function switchTab(name){
@@ -758,7 +766,8 @@ async function loadLibrary(){
         var link = document.createElement('span');
         link.className = 'toc-link';
         link.textContent = (c.n ? ('第'+c.n+'章 · ') : '') + stripSec(c.title);
-        link.onclick = function(){ showChapter(v.name, c.n); };
+        link.setAttribute('data-vol', v.name);
+        link.setAttribute('data-ch', c.n);
         it.appendChild(dot);
         it.appendChild(link);
         list.appendChild(it);
@@ -880,7 +889,7 @@ function renderPdfLists(pdfs){
   var groups = { '合订本': [], '人祖传': [] };
   pdfs.forEach(function(p){
     if (p.group === '人祖传'){ groups['人祖传'].push(p); return; }
-    var m = p.name.match(/第([一二三四五六七八九十]+)卷/);
+    var m = p.name.match(/第([零一二三四五六七八九十两]+)卷/);
     var key = m ? volOrder.find(function(k){ return k.indexOf('第' + m[1] + '卷') === 0; }) : null;
     if (key){ groups[key] = groups[key] || []; groups[key].push(p); }
     else { groups['合订本'].push(p); }

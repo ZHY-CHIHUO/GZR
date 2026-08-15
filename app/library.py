@@ -16,7 +16,7 @@ _CN = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "�
 
 def _cn_vol_num(s: str):
     """提取 第N卷/章/节 的汉字数字并转整数（支持 一~九、十、几十、几十几）。"""
-    m = re.search(r"第([一二三四五六七八九十]+)(?:卷|章|节)", s)
+    m = re.search(r"第([零一二三四五六七八九十两]+)(?:卷|章|节)", s)
     if not m:
         return 0
     txt = m.group(1)
@@ -113,29 +113,53 @@ def _combined_flat_toc():
         return []
     r = PdfReader(str(path))
     page_map = {}
+    front = []   # 前言：制作说明/供稿/阅读方法/序等
+    extras = []  # 番外篇等
+    vols = novel_volumes()
+    vol_words = set()
+    for v in vols:
+        vol_words.add(v["name"])
+        if "：" in v["name"]:
+            vol_words.add(v["name"].split("：")[-1])
     for it in r.outline:
         if isinstance(it, list):
             continue
-        t = str(it.title or "")
-        m = re.match(r"^第[一二三四五六七八九十百千]+节[：:]\s*(.*)$", t)
+        t = str(it.title or "").strip()
+        if not t:
+            continue
+        try:
+            pg = int(r.get_destination_page_number(it)) + 1
+        except Exception:
+            pg = None
+        m = re.match(r"^第[零一二三四五六七八九十百千两]+节[：:]\s*(.*)$", t)
         if m:
-            try:
-                p = int(r.get_destination_page_number(it)) + 1
-            except Exception:
-                p = None
-            page_map[m.group(1).strip()] = p
+            page_map[m.group(1).strip()] = pg
+        elif t in vol_words or re.match(r"^第[零一二三四五六七八九十两]+卷", t):
+            continue  # 跳过纯卷名/残缺卷级书签
+        elif t.startswith("番外"):
+            extras.append((t, pg))
+        else:
+            front.append((t, pg))
     out = []
-    for v in novel_volumes():
+    if front:
+        out.append({"title": "前言", "page": front[0][1], "depth": 0})
+        for t, pg in front:
+            out.append({"title": t, "page": pg, "depth": 1})
+    for v in vols:
         items = []
         for c in v["chapters"]:
-            t = re.sub(r"^第[一二三四五六七八九十百千]+节[：:]\s*", "", c["title"]).strip()
+            t = re.sub(r"^第[零一二三四五六七八九十百千两]+节[：:]\s*", "", c["title"]).strip()
             pg = page_map.get(t)
             if pg:
-                items.append((t, pg))
+                items.append((c["n"], t, pg))
         if items:
-            out.append({"title": v["name"], "page": items[0][1], "depth": 0})
-            for t, pg in items:
-                out.append({"title": t, "page": pg, "depth": 1})
+            out.append({"title": v["name"], "page": items[0][2], "depth": 0})
+            for n, t, pg in items:
+                out.append({"title": f"第{n}章 · {t}", "page": pg, "depth": 1})
+    if extras:
+        out.append({"title": "番外", "page": extras[0][1], "depth": 0})
+        for t, pg in extras:
+            out.append({"title": t, "page": pg, "depth": 1})
     return out
 
 
@@ -145,11 +169,11 @@ def _normalize_toc(fn, items):
     - 合订本(1.1)：序/第X卷 = 一级(depth0)，第X节 = 二级(depth1)
     """
     if "人祖传" in fn:
-        return [it for it in items if re.match(r"^人祖传（[一二三四五六七八九十]+）——", it["title"])]
+        return [it for it in items if re.match(r"^人祖传（[零一二三四五六七八九十两]+）——", it["title"])]
     if "1.1" in fn:
         return _combined_flat_toc()
     # 分卷 PDF：只保留 第X节 章节标题
-    return [it for it in items if re.match(r"^第[一二三四五六七八九十百千]+节", it["title"])]
+    return [it for it in items if re.match(r"^第[零一二三四五六七八九十百千两]+节", it["title"])]
 
 
 def pdf_toc():
