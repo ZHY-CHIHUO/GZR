@@ -32,6 +32,17 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="蛊真人 RAG", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    """静态资源不缓存：前端改动后浏览器刷新即可生效。"""
+    response = await call_next(request)
+    if request.url.path.startswith("/static/") or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, max-age=0"
+    return response
+
+
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
