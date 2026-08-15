@@ -153,6 +153,7 @@
           <button class="btn btn-primary" onclick="startQuiz()">开始答题</button>
           <span id="quiz-timer" class="game-timer" title="本组用时">00:00</span>
           <span id="quiz-score" class="game-score">累计 0/0</span>
+          <button class="btn btn-ghost" id="game-history-btn" onclick="openQuizBank()">题库</button>
           <button class="btn btn-ghost" id="game-history-btn" onclick="openGameHistory()">历史记录</button>
         </div>
         <div id="quiz-body" class="game-body"><div class="empty">点击「开始答题」挑战你的蛊真人知识！</div></div>
@@ -208,6 +209,25 @@
     </div>
   </section>
 </main>
+
+<!-- 自定义题库弹窗 -->
+<div class="modal-bg" id="custom-quiz-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h2>自定义题库</h2><button class="modal-x" onclick="closeModal('custom-quiz-modal')">×</button></div>
+    <div class="modal-body">
+      <div class="cq-form">
+        <div class="cq-row"><label>分类</label><select id="cq-type"><option value="gu">蛊虫题</option><option value="person">人物题</option><option value="type">蛊虫类型题</option></select></div>
+        <div class="cq-row"><label>题目</label><textarea id="cq-q" rows="2" placeholder="输入题目内容"></textarea></div>
+        <div class="cq-row"><label>选项</label><div class="cq-opts"><input id="cq-o0" placeholder="选项 A"><input id="cq-o1" placeholder="选项 B"><input id="cq-o2" placeholder="选项 C"><input id="cq-o3" placeholder="选项 D"></div></div>
+        <div class="cq-row"><label>正确答案</label><select id="cq-ans"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></div>
+        <div class="cq-row"><label>解析</label><input id="cq-exp" placeholder="可选：答案解析"></div>
+        <div class="cq-actions"><button class="btn btn-primary" onclick="addCustomQuestion()">添加题目</button></div>
+      </div>
+      <div class="cq-list-head"><span>我的题目（<span id="cq-count">0</span>）</span></div>
+      <div id="cq-list"></div>
+    </div>
+  </div>
+</div>
 
 <!-- 游戏历史记录弹窗 -->
 <div class="modal-bg" id="game-history-modal">

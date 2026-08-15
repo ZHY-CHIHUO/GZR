@@ -858,17 +858,62 @@ function startQuizTimer(){
   }, 250);
 }
 function stopQuizTimer(){ if (QUIZ_TIMER){ clearInterval(QUIZ_TIMER); QUIZ_TIMER = null; } }
+function customQuiz(){ try { return JSON.parse(localStorage.getItem('gzr.customQuiz') || '[]'); } catch(e){ return []; } }
+function saveCustomQuiz(list){ try { localStorage.setItem('gzr.customQuiz', JSON.stringify(list)); } catch(e){} }
+function shuffleArray(a){ for (var i = a.length - 1; i > 0; i--){ var k = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[k]; a[k] = t; } return a; }
 async function startQuiz(){
   var type = $('quiz-type').value;
   QUIZ_N = parseInt($('quiz-n').value, 10) || 10;
   $('quiz-body').innerHTML = '<div class="empty">出题中…</div>';
   try {
     var j = await (await fetch('/api/quiz', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({type: type, n: QUIZ_N})})).json();
-    if (!j.questions || !j.questions.length) throw new Error('题库为空');
-    QUIZ_QS = j.questions; QUIZ_IDX = 0; QUIZ_RIGHT = 0;
+    var qs = (j.questions || []).slice();
+    var custom = customQuiz();
+    if (custom.length){
+      var extra = custom.filter(function(c){ return type === 'mix' || c.type === type || c.type === 'mix'; });
+      qs = qs.concat(extra);
+    }
+    qs = shuffleArray(qs).slice(0, QUIZ_N);
+    if (!qs.length) throw new Error('题库为空');
+    QUIZ_QS = qs; QUIZ_IDX = 0; QUIZ_RIGHT = 0;
     startQuizTimer();
     renderQuizQ();
   } catch(e){ $('quiz-body').innerHTML = '<div class="empty">出题失败：'+esc(e.message)+'</div>'; }
+}
+function openQuizBank(){
+  var list = customQuiz();
+  $('cq-count').textContent = list.length;
+  renderCustomQuizList();
+  $('custom-quiz-modal').classList.add('show');
+}
+function renderCustomQuizList(){
+  var box = $('cq-list'); if (!box) return;
+  var list = customQuiz();
+  if (!list.length){ box.innerHTML = '<div class="cq-empty">还没有自定义题目，用上面的表单添加，开始答题时会混入题库。</div>'; return; }
+  var labels = {gu:'蛊虫', person:'人物', type:'蛊虫类型'};
+  box.innerHTML = list.map(function(c, i){
+    return '<div class="cq-item"><div class="cq-item-head"><b>['+esc(labels[c.type]||c.type)+'] '+esc(c.q)+'</b><button class="cq-del" onclick="deleteCustomQuestion('+i+')">删除</button></div><div class="cq-item-opts">'+c.options.map(function(o, j){ return '<span'+(j === c.answer ? ' class="cq-right"' : '')+'>'+esc(o)+'</span>'; }).join('')+'</div></div>';
+  }).join('');
+}
+function deleteCustomQuestion(i){
+  var list = customQuiz(); list.splice(i, 1); saveCustomQuiz(list);
+  var box = $('cq-count'); if (box) box.textContent = list.length;
+  renderCustomQuizList(); toast('已删除该题目');
+}
+function addCustomQuestion(){
+  var type = $('cq-type').value;
+  var q = ($('cq-q').value || '').trim();
+  var opts = [0,1,2,3].map(function(i){ return ($('cq-o'+i).value || '').trim(); });
+  var ans = parseInt($('cq-ans').value, 10);
+  var exp = ($('cq-exp').value || '').trim();
+  if (!q || opts.some(function(o){ return !o; })){ toast('请填写题目和四个选项'); return; }
+  if (opts.some(function(o, i){ return opts.indexOf(o) !== i; })){ toast('四个选项不能重复'); return; }
+  var list = customQuiz();
+  list.push({type: type, q: q, options: opts, answer: ans, explain: exp || '自定义题目'});
+  saveCustomQuiz(list);
+  $('cq-q').value = ''; [0,1,2,3].forEach(function(i){ $('cq-o'+i).value = ''; }); $('cq-exp').value = '';
+  $('cq-count').textContent = list.length;
+  renderCustomQuizList(); toast('已添加，开始答题时会混入题库');
 }
 function renderQuizQ(){
   if (QUIZ_IDX >= QUIZ_QS.length){ finishQuiz(); return; }
@@ -988,19 +1033,9 @@ function renderRiddle(){
   html += '</div>';
   if (RIDDLE_IDX < 2) html += '<br><button class="btn btn-ghost" onclick="moreHint()">更多提示（-1分）</button>';
   html += '<div class="riddle-ask"><input id="riddle-input" placeholder="输入你的答案…" autocomplete="off"><button class="btn btn-primary" onclick="guessRiddle()">猜！</button></div>';
-  if (RIDDLE.options && RIDDLE.options.length){
-    html += '<div class="riddle-opts">';
-    RIDDLE.options.forEach(function(o, i){ html += '<button class="quiz-opt" onclick="guessRiddleOpt('+i+')">'+esc(o)+'</button>'; });
-    html += '</div>';
-  }
   html += '<div id="riddle-fb"></div>';
   $('riddle-body').innerHTML = html;
   var inp = $('riddle-input'); if (inp) { inp.focus(); inp.addEventListener('keydown', function(e){ if (e.key==='Enter') guessRiddle(); }); }
-}
-function guessRiddleOpt(i){
-  if (!RIDDLE.options || !RIDDLE.options[i]) return;
-  $('riddle-input').value = RIDDLE.options[i];
-  guessRiddle();
 }
 function moreHint(){
   if (RIDDLE_IDX >= 2) return;

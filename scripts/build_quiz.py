@@ -20,45 +20,97 @@ def main():
     random.seed(20260815)
 
     quiz = []
-    # ---- 蛊虫选择题：描述 → 蛊名 ----
     gu = wiki.get("蛊虫", [])
-    gnames = [e["name"] for e in gu]
-    for e in gu:
-        d = e["desc"]
-        if len(d) < 15:
-            continue
-        dist = random.sample([n for n in gnames if n != e["name"]], 3)
-        opts = [e["name"]] + dist
-        random.shuffle(opts)
-        quiz.append({
-            "type": "蛊虫",
-            "q": f"以下哪个蛊虫符合这段描述：{d[:40]}……",
-            "options": opts, "answer": opts.index(e["name"]),
-            "explain": f"{e['name']}：{d[:90]}",
-        })
-        if len([x for x in quiz if x["type"] == "蛊虫"]) >= 220:
-            break
-
-    # ---- 人物选择题：描述 → 人物 ----
     ppl = wiki.get("人物", [])
-    pnames = [e["name"] for e in ppl]
-    for e in ppl:
+
+    def excerpt(d, n):
+        return re.sub(r"\s+", " ", d).strip()[:n] + "……"
+
+    RANKS = ["一转", "二转", "三转", "四转", "五转", "六转", "七转", "八转", "九转", "仙蛊"]
+
+    def push(item):
+        quiz.append(item)
+
+    # ---- 蛊虫题 220：三种题型混排（描述→名称 / 名称→描述 / 转数）----
+    gu_pool = [e for e in gu if len(e.get("desc", "")) >= 40]
+    gu_ranked = [e for e in gu if re.search(r"([一二三四五六七八九十]+)转", e.get("sub", "") or "")]
+    for e in gu_pool:
+        if sum(1 for x in quiz if x["type"] == "蛊虫") >= 220:
+            break
         d = e["desc"]
-        if len(d) < 15:
+        kind = random.choice(["T1", "T1", "T2", "T3"])  # T1 偏多，打乱公式感
+        if kind == "T3" and e.get("sub"):
+            m = re.search(r"([一二三四五六七八九十]+)转", e["sub"])
+            if m:
+                ans = m.group(1) + "转"
+                dist = random.sample([r for r in RANKS if r != ans], 3)
+                opts = [ans] + dist
+                random.shuffle(opts)
+                push({"type": "蛊虫", "q": f"「{e['name']}」是几转蛊虫？",
+                      "options": opts, "answer": opts.index(ans), "explain": f"{e['name']}：{d[:90]}"})
+                continue
+        if kind == "T2":
+            others = [x for x in gu_pool if x is not e]
+            if len(others) < 3:
+                continue
+            dist = [excerpt(x["desc"], 40) for x in random.sample(others, 3)]
+            right = excerpt(d, 40)
+            opts = [right] + dist
+            random.shuffle(opts)
+            push({"type": "蛊虫", "q": f"以下哪段描述对应蛊虫「{e['name']}」？",
+                  "options": opts, "answer": opts.index(right), "explain": f"{e['name']}：{d[:90]}"})
             continue
-        dist = random.sample([n for n in pnames if n != e["name"]], 3)
+        # T1：描述（更短）→ 名称
+        others = [x for x in gu_pool if x is not e]
+        if len(others) < 3:
+            continue
+        dist = [x["name"] for x in random.sample(others, 3)]
         opts = [e["name"]] + dist
         random.shuffle(opts)
-        quiz.append({
-            "type": "人物",
-            "q": f"根据描述猜人物：{d[:40]}……",
-            "options": opts, "answer": opts.index(e["name"]),
-            "explain": f"{e['name']}：{d[:90]}",
-        })
-        if len([x for x in quiz if x["type"] == "人物"]) >= 120:
-            break
+        push({"type": "蛊虫", "q": f"以下哪个蛊虫符合这段描述：{excerpt(d, 26)}",
+              "options": opts, "answer": opts.index(e["name"]), "explain": f"{e['name']}：{d[:90]}"})
 
-    # ---- 蛊虫类型题：蛊名 → 类型 ----
+    # ---- 人物题 120：描述→人物 / 描述匹配 / 阵营 ----
+    ppl_pool = [e for e in ppl if len(e.get("desc", "")) >= 40]
+    for e in ppl_pool:
+        if sum(1 for x in quiz if x["type"] == "人物") >= 120:
+            break
+        d = e["desc"]
+        kind = random.choice(["T1", "T1", "T2", "T3"])
+        if kind == "T3":
+            if "魔道" in d:
+                ans = "魔道"
+            elif "正道" in d:
+                ans = "正道"
+            else:
+                ans = "散修/中立"
+            dist = random.sample([x for x in ["正道", "魔道", "散修/中立", "异人"] if x != ans], 3)
+            opts = [ans] + dist
+            random.shuffle(opts)
+            push({"type": "人物", "q": f"「{e['name']}」出身哪个阵营？",
+                  "options": opts, "answer": opts.index(ans), "explain": f"{e['name']}：{d[:90]}"})
+            continue
+        if kind == "T2":
+            others = [x for x in ppl_pool if x is not e]
+            if len(others) < 3:
+                continue
+            dist = [excerpt(x["desc"], 42) for x in random.sample(others, 3)]
+            right = excerpt(d, 42)
+            opts = [right] + dist
+            random.shuffle(opts)
+            push({"type": "人物", "q": f"以下哪段描述对应人物「{e['name']}」？",
+                  "options": opts, "answer": opts.index(right), "explain": f"{e['name']}：{d[:90]}"})
+            continue
+        others = [x for x in ppl_pool if x is not e]
+        if len(others) < 3:
+            continue
+        dist = [x["name"] for x in random.sample(others, 3)]
+        opts = [e["name"]] + dist
+        random.shuffle(opts)
+        push({"type": "人物", "q": f"以下哪位人物符合这段描述：{excerpt(d, 26)}",
+              "options": opts, "answer": opts.index(e["name"]), "explain": f"{e['name']}：{d[:90]}"})
+
+    # ---- 蛊虫类型题 100：蛊名 → 类型（措辞随机）----
     typed = []
     for e in gu:
         m = TYPE_RE.search(e["desc"])
@@ -66,19 +118,16 @@ def main():
             typed.append((e["name"], m.group(1), e["desc"]))
     all_types = sorted({t for _, t, _ in typed})
     for name, t, d in typed:
+        if sum(1 for x in quiz if x["type"] == "蛊虫类型") >= 100:
+            break
         if len(all_types) < 4:
             break
         dist = random.sample([x for x in all_types if x != t], 3)
         opts = [t] + dist
         random.shuffle(opts)
-        quiz.append({
-            "type": "蛊虫类型",
-            "q": f"「{name}」是什么类型的蛊虫？",
-            "options": opts, "answer": opts.index(t),
-            "explain": f"{name}：{d[:90]}",
-        })
-        if len([x for x in quiz if x["type"] == "蛊虫类型"]) >= 100:
-            break
+        stem = random.choice([f"「{name}」是什么类型的蛊虫？", f"「{name}」属于哪一类蛊虫？"])
+        push({"type": "蛊虫类型", "q": stem,
+              "options": opts, "answer": opts.index(t), "explain": f"{name}：{d[:90]}"})
 
     # ---- 猜谜池 ----
     def rank_hint(e):
