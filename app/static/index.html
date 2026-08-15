@@ -100,7 +100,7 @@
         </div>
         <div class="wiki-home-body">
           <section class="wiki-category-section" aria-labelledby="wiki-category-title">
-            <div class="wiki-section-head"><div><p class="wiki-overline">EXPLORE</p><h2 id="wiki-category-title">浏览分类</h2></div><span id="wiki-total-count" class="wiki-total-count"></span></div>
+            <div class="wiki-section-head"><div><p class="wiki-overline">EXPLORE</p><h2 id="wiki-category-title">浏览分类</h2></div><span id="wiki-total-count" class="wiki-total-count"></span><button type="button" class="wiki-add-home" id="wiki-add-home" onclick="openWikiAdd()">+ 新增词条</button></div>
             <div class="wiki-category-grid" id="wiki-cats"></div>
           </section>
           <section class="wiki-feature-section" aria-labelledby="wiki-feature-title">
@@ -261,7 +261,7 @@
 <!-- 百科条目编辑弹窗 -->
 <div class="modal-bg" id="wiki-edit-modal">
   <div class="modal modal-wide">
-    <div class="modal-head"><h2>编辑百科条目</h2><button class="modal-x" onclick="closeModal('wiki-edit-modal')">×</button></div>
+    <div class="modal-head"><h2 id="we-title">编辑百科条目</h2><button class="modal-x" onclick="closeModal('wiki-edit-modal')">×</button></div>
     <div class="modal-body">
       <div class="we-form">
         <div class="we-row"><label>分类</label><select id="we-cat"></select></div>
@@ -274,7 +274,7 @@
         <span class="we-spacer"></span>
         <button class="btn btn-primary" onclick="saveWikiEntry()">保存修改</button>
       </div>
-      <p class="we-hint">修改会直接写入资料库（wiki.json），刷新后保留；重建题库后，选择题与猜谜也会用上新资料。</p>
+
     </div>
   </div>
 </div>

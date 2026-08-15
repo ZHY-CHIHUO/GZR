@@ -348,7 +348,28 @@ def wiki_update(req: WikiEntryReq):
         return JSONResponse({"ok": False, "error": f"分类不存在：{cat}"}, status_code=404)
     idx = next((i for i, e in enumerate(entries) if e.get("name") == name), None)
     if idx is None:
-        return JSONResponse({"ok": False, "error": f"条目不存在：{cat} / {name}"}, status_code=404)
+        if req.delete:
+            return JSONResponse({"ok": False, "error": f"条目不存在：{cat} / {name}"}, status_code=404)
+        # ---- 新增词条 ----
+        new_name = (req.name or "").strip()
+        new_cat = req.cat or cat
+        if not new_name:
+            return JSONResponse({"ok": False, "error": "名称不能为空"}, status_code=400)
+        entry = {
+            "name": new_name,
+            "desc": (req.desc or "").strip(),
+            "section": (req.section or "").strip() or new_cat,
+            "sub": (req.sub or "").strip(),
+        }
+        target = [e for e in data.get(new_cat, []) if e.get("name") != new_name]
+        data[new_cat] = target
+        target.append(entry)
+        try:
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception as e:
+            return JSONResponse({"ok": False, "error": f"写入资料库失败：{e}"}, status_code=500)
+        _content_mtime["wiki"] = None
+        return {"ok": True, "cat": new_cat, "entry": entry, "created": True}
     if req.delete:
         entries.pop(idx)
         if not entries:
