@@ -37,7 +37,7 @@ if not exist ".venv\.deps_ok" (
     echo ok> ".venv\.deps_ok"
 )
 
-echo [3/3] 正在启动服务...
+echo [3/3] 正在启动服务，首次加载数据约需 5~15 秒，请稍候...
 set "PORT=8000"
 netstat -ano | findstr /r ":8000 " | findstr "LISTENING" >nul 2>nul
 if errorlevel 1 goto port_ok
@@ -49,11 +49,33 @@ netstat -ano | findstr /r ":8002 " | findstr "LISTENING" >nul 2>nul
 if errorlevel 1 goto port_ok
 set "PORT=8003"
 :port_ok
+
+REM 后台启动服务，日志写到 service.log
+start "" /b cmd /c "".venv\Scripts\uvicorn.exe" app.main:app --host 127.0.0.1 --port %PORT% > service.log 2>&1"
+
+REM 每 1 秒检查一次，最多等 90 秒
+set /a WAIT=0
+:waitloop
+ping -n 2 127.0.0.1 >nul
+netstat -ano | findstr /r ":%PORT% " | findstr "LISTENING" >nul 2>nul
+if not errorlevel 1 goto port_ready
+set /a WAIT+=1
+if %WAIT% GEQ 90 goto port_timeout
+goto waitloop
+
+:port_ready
 echo.
-echo 正在打开浏览器：http://127.0.0.1:%PORT%
-echo 若浏览器提示无法连接，请等 5 秒后按 F5 刷新
+echo 服务已就绪，正在打开浏览器...
+start "" "http://127.0.0.1:%PORT%"
+echo 访问地址：http://127.0.0.1:%PORT%
+echo 若浏览器没有弹出，请手动打开上面的地址
 echo 关闭本窗口 = 停止服务
 echo.
-start "" "http://127.0.0.1:%PORT%"
-".venv\Scripts\uvicorn.exe" app.main:app --host 127.0.0.1 --port %PORT%
 pause
+exit /b 0
+
+:port_timeout
+echo.
+echo [提示] 服务启动超时（90 秒），请查看同目录下的 service.log
+pause
+exit /b 1
