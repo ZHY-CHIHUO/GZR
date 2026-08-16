@@ -78,6 +78,12 @@ class NovelSearchReq(BaseModel):
     limit: int = 60
 
 
+class LoreSearchReq(BaseModel):
+    query: str
+    is_regex: bool = False
+    limit: int = 80
+
+
 def _novel_text_search(query: str, is_regex: bool = False, vol: str | None = None,
                        limit: int = 60, stop_after_first: bool = False):
     """按卷、章自然顺序扫描原著；既供阅读器搜索，也供问答作可核验的精确证据。"""
@@ -937,6 +943,45 @@ def locate(req: LocateReq):
     except Exception as e:
         return {"ok": False, "path": path, "error": str(e)}
     return {"ok": True, "path": path}
+
+
+@app.post("/api/lore/search")
+def search_lore_text(req: LoreSearchReq):
+    """资料合集段落全文检索：支持普通文字与正则表达式。"""
+    q = (req.query or "").strip()
+    if not q:
+        return {"results": [], "total_matches": 0, "query": q, "is_regex": req.is_regex}
+    try:
+        pattern = re.compile(q if req.is_regex else re.escape(q), re.IGNORECASE)
+    except re.error as e:
+        return JSONResponse({"error": f"正则表达式语法错误：{e}"}, status_code=400)
+    if req.is_regex and pattern.search(""):
+        return JSONResponse({"error": "正则表达式不能匹配空文本，请至少匹配一个字符"}, status_code=400)
+
+    data = library.lore_structured()
+    results, total_matches = [], 0
+    section = data.get("title", "资料合集")
+    limit = max(1, min(int(req.limit or 80), 200))
+    for index, para in enumerate(data.get("paras", [])):
+        text = str(para.get("text") or "")
+        if para.get("kind") == "h2":
+            section = text
+        matches = list(pattern.finditer(text))
+        if not matches:
+            continue
+        snippets = []
+        for match in matches[:3]:
+            start, end = max(0, match.start() - 44), min(len(text), match.end() + 88)
+            snippets.append({"snippet": text[start:end], "match": match.group(0)})
+        results.append({
+            "index": index, "anchor": para.get("anchor", "") or f"lpara{index}",
+            "section": section, "text": text, "count": len(matches), "snippets": snippets,
+        })
+        total_matches += len(matches)
+        if len(results) >= limit:
+            break
+    return {"results": results, "total_matches": total_matches, "paragraphs_matched": len(results),
+            "query": q, "is_regex": req.is_regex, "truncated": len(results) >= limit}
 
 
 @app.get("/api/lore/data")

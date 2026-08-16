@@ -1302,6 +1302,66 @@ function renderLore(){
   });
   tp.innerHTML = b;
 }
+
+/* ---------- 资料合集全文搜索 / 正则搜索 ---------- */
+var LORE_SEARCH_ACTIVE = false;
+async function doLoreSearch(){
+  var input = $('lore-search-input');
+  var q = (input ? input.value : '').trim();
+  if (!q){ clearLoreSearch(); return; }
+  var isRegex = $('lore-search-regex') ? $('lore-search-regex').checked : false;
+  var resBox = $('lore-search-results');
+  var tocBody = $('lore-toc-body');
+  if (resBox){
+    resBox.hidden = false;
+    resBox.innerHTML = '<div class="empty">正在检索资料合集…</div>';
+  }
+  if (tocBody) tocBody.hidden = true;
+  LORE_SEARCH_ACTIVE = true;
+  try {
+    var resp = await fetch('/api/lore/search', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query:q, is_regex:isRegex, limit:100})
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || ('HTTP ' + resp.status));
+    if (!data.results || !data.results.length){
+      resBox.innerHTML = '<div class="empty">未找到匹配内容<br><span style="font-size:11px;color:var(--muted)">' + (isRegex ? '请检查正则表达式语法' : '可尝试缩短关键词') + '</span></div>';
+      return;
+    }
+    var html = '<div class="novel-search-summary">匹配 <b>' + data.paragraphs_matched + '</b> 段（共 ' + data.total_matches + ' 处）</div><div class="novel-search-list">';
+    data.results.forEach(function(r){
+      html += '<div class="novel-search-item" onclick="openFoundLore(\'' + attrEsc(r.anchor) + '\', ' + r.index + ', \'' + attrEsc(q) + '\', ' + (isRegex ? 'true' : 'false') + ')">';
+      html += '<div class="novel-search-item-head"><strong>' + esc(r.section || '资料合集') + '</strong><span class="count-badge">' + r.count + ' 处</span></div>';
+      (r.snippets || []).forEach(function(s){
+        html += '<div class="novel-search-snippet">' + highlightSearchMatch(s.snippet, q, isRegex) + '</div>';
+      });
+      html += '</div>';
+    });
+    resBox.innerHTML = html + '</div>';
+  } catch(e){
+    resBox.innerHTML = '<div class="empty" style="color:var(--accent)">检索失败：' + esc(e.message) + '</div>';
+  }
+}
+function clearLoreSearch(){
+  var input = $('lore-search-input'); if (input) input.value = '';
+  var resBox = $('lore-search-results'), tocBody = $('lore-toc-body');
+  if (resBox){ resBox.hidden = true; resBox.innerHTML = ''; }
+  if (tocBody) tocBody.hidden = false;
+  LORE_SEARCH_ACTIVE = false;
+}
+function openFoundLore(anchor, index, keyword, isRegex){
+  if (!LORE_DATA) return;
+  var target = $(anchor) || $('lpara' + index);
+  if (!target) return;
+  var old = document.querySelectorAll('#lore-text .search-highlight-live');
+  old.forEach(function(mark){ mark.outerHTML = mark.textContent; });
+  try {
+    var re = isRegex ? new RegExp('(' + keyword + ')', 'gi') : new RegExp('(' + escapeRegExp(keyword) + ')', 'gi');
+    target.innerHTML = target.textContent.replace(re, '<mark class="search-highlight-live">$1</mark>');
+  } catch(e){}
+  target.scrollIntoView({behavior:'smooth', block:'center'});
+}
 /* 游戏子页签 */
 document.querySelectorAll('.rtab[data-gt]').forEach(function(btn){
   btn.addEventListener('click', function(){
@@ -1532,6 +1592,10 @@ $('home-q').addEventListener('keydown', function(e){ if (e.key === 'Enter') askF
 var novelSearchInp = $('novel-search-input');
 if (novelSearchInp){
   novelSearchInp.addEventListener('keydown', function(e){ if (e.key === 'Enter') doNovelSearch(); });
+}
+var loreSearchInp = $('lore-search-input');
+if (loreSearchInp){
+  loreSearchInp.addEventListener('keydown', function(e){ if (e.key === 'Enter') doLoreSearch(); });
 }
 window.addEventListener('resize', fitHomeWatermark);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHomeWatermark);

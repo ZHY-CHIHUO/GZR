@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/refine.css?v=3">
 <link rel="stylesheet" href="/static/ink.css?v=3">
 <link rel="stylesheet" href="/static/wiki-browser.css?v=4">
-<link rel="stylesheet" href="/static/premium.css?v=21">
+<link rel="stylesheet" href="/static/premium.css?v=22">
 <script src="/static/pdfjs/pdf.min.js"></script>
 </head>
 <body>
@@ -107,7 +107,18 @@
     <div id="read-lore" class="read-pane" hidden>
       <div class="toc-pane" id="lore-toc">
         <div class="toc-head"><span class="toc-title">目录</span><button class="toc-fold" onclick="toggleLoreToc()" title="收起/展开目录">«</button></div>
-        <div class="toc-body"><div class="empty">加载中…</div></div>
+        <div class="lore-search-box">
+          <div class="novel-search-row">
+            <input type="text" id="lore-search-input" placeholder="搜索资料合集（回车执行）" autocomplete="off">
+            <button type="button" id="lore-search-btn" onclick="doLoreSearch()">查找</button>
+          </div>
+          <div class="novel-search-options">
+            <label><input type="checkbox" id="lore-search-regex"> 正则表达式</label>
+            <button type="button" class="novel-search-clear" onclick="clearLoreSearch()">清空</button>
+          </div>
+        </div>
+        <div class="lore-search-results" id="lore-search-results" hidden></div>
+        <div class="toc-body" id="lore-toc-body"><div class="empty">加载中…</div></div>
       </div>
       <div class="text-pane" id="lore-text"><div class="empty">加载中…</div></div>
     </div>
@@ -362,7 +373,7 @@
 
 <div id="toast"></div>
 
-<script src="/static/app.js?v=16"></script>
+<script src="/static/app.js?v=17"></script>
 <script src="/static/wiki-browser.js?v=6"></script>
 </body>
 </html>
