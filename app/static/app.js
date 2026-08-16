@@ -1449,7 +1449,7 @@ async function doNovelSearch(){
     var html = '<div class="novel-search-summary">匹配 <b>' + j.chapters_matched + '</b> 章（共 ' + j.total_matches + ' 处）</div>';
     html += '<div class="novel-search-list">';
     j.results.forEach(function(r){
-      html += '<div class="novel-search-item" onclick="openFoundChapter('' + attrEsc(r.vol) + '', ' + r.chapter + ', '' + attrEsc(q) + '', ' + (isRegex ? 'true' : 'false') + ')">';
+      html += '<div class="novel-search-item" onclick="openFoundChapter(\'' + attrEsc(r.vol) + '\', ' + r.chapter + ', \'' + attrEsc(q) + '\', ' + (isRegex ? 'true' : 'false') + ')">';
       html += '<div class="novel-search-item-head"><strong>' + esc(r.vol) + ' · 第' + r.chapter + '章</strong><span class="count-badge">' + r.count + ' 处</span></div>';
       html += '<div class="novel-search-item-title">' + esc(r.title) + '</div>';
       if (r.snippets && r.snippets.length){
