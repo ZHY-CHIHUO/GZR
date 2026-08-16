@@ -239,11 +239,8 @@
         <div class="result" id="web-fallback-status"></div>
       </div>
       <div class="card">
-        <h3><span class="step-no">3</span>检索模型（影响准确率与速度）</h3>
-        <p>不同向量模型的准确率与查询速度不同（实测数据见选项说明）。切换后自动重建检索器，无需重启。</p>
-        <select id="embed-model" class="field-wide"></select>
-        <div class="result" id="model-result"></div>
-        <br><button class="btn btn-primary" onclick="saveEmbedModel()">切换检索模型</button>
+        <h3><span class="step-no">3</span>检索模型</h3>
+        <p>当前固定使用 <b>Jina 中文增强模型（jina-embeddings-v2-base-zh）</b>。为保证检索结果一致性，已移除模型切换功能。</p>
       </div>
     </div>
   </section>
@@ -373,7 +370,7 @@
 
 <div id="toast"></div>
 
-<script src="/static/app.js?v=17"></script>
+<script src="/static/app.js?v=18"></script>
 <script src="/static/wiki-browser.js?v=6"></script>
 </body>
 </html>

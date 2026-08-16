@@ -242,8 +242,8 @@ def pdf_toc():
     if _pdf_toc_cache is not None:
         return _pdf_toc_cache
     import json as _json
-    from app.config import BASE as _BASE
-    cache = _BASE / "data" / "pdf_toc_cache.json"
+    from app.config import DATA_DIR as _DD
+    cache = _DD / "pdf_toc_cache.json"
     if cache.is_file():
         try:
             _pdf_toc_cache = _json.loads(cache.read_text(encoding="utf-8"))
@@ -317,14 +317,14 @@ _lore_structured_cache = None
 
 def lore_structured():
     """资料合集结构化数据（供主应用统一 UI 渲染）：{title, toc:[{text,level,anchor}], paras:[{kind,level,text,anchor}]}
-    磁盘缓存：首次生成后写入 data/lore_structured_cache.json，之后秒开（docx 解析约 12 秒）。"""
+    磁盘缓存：首次生成后写入 data_jina2/lore_structured_cache.json，之后秒开（docx 解析约 12 秒）。"""
     global _lore_structured_cache
     if _lore_structured_cache is not None:
         return _lore_structured_cache
     from docx import Document
     import json as _json
-    from app.config import DATA_DIR as _DD, BASE as _BASE
-    _cache_file = _BASE / "data" / "lore_structured_cache.json"
+    from app.config import DATA_DIR as _DD
+    _cache_file = _DD / "lore_structured_cache.json"
     _toc_path = _DD / "lore_toc.json"
     _toc_mtime = _toc_path.stat().st_mtime if _toc_path.is_file() else 0
     if _cache_file.is_file() and _cache_file.stat().st_mtime >= _toc_mtime:

@@ -30,7 +30,7 @@ def build_for(dirname):
     d = BASE / dirname
     info = json.load(open(d / "info.json", encoding="utf-8"))
     model = info["model"]
-    wiki = json.load(open(BASE / "data" / "wiki.json", encoding="utf-8"))
+    wiki = json.load(open(BASE / "data_jina2" / "wiki.json", encoding="utf-8"))
     docs = []
     for cat, items in wiki.items():
         if cat == "_deleted":

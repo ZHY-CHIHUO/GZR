@@ -711,23 +711,6 @@ async function saveModel(){
   await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model: m})});
   toast('问答模型已设为：' + m);
 }
-async function loadModels(){
-  try {
-    var j = await (await fetch('/api/models')).json();
-    MODELS = j.options || [];
-    var sel = $('embed-model');
-    sel.innerHTML = '';
-    MODELS.forEach(function(o){
-      var opt = document.createElement('option');
-      opt.value = o.id;
-      opt.textContent = o.label + '（' + o.model.split('/').pop() + '）' +
-        (o.hit5 != null ? ' · 正文命中' + Math.round(o.hit5*100) + '%' : '') +
-        (o.avg_query_s != null ? ' · ' + o.avg_query_s + 's/问' : '');
-      if (o.current) opt.selected = true;
-      sel.appendChild(opt);
-    });
-  } catch(e){ /* 忽略 */ }
-}
 async function initWebFallback(){
   var cb = $('web-fallback');
   if (!cb) return;
@@ -737,19 +720,6 @@ async function initWebFallback(){
     var st = $('web-fallback-status');
     if (st){ st.className='result ok'; st.textContent = cb.checked ? '已开启：查不到时会联网回答（消耗额外额度）' : '已关闭：查不到时如实说明，不联网'; }
   };
-}
-async function saveEmbedModel(){
-  var id = $('embed-model').value;
-  var res = $('model-result');
-  res.className='result'; res.textContent='正在切换检索模型（加载向量库，约需几秒~半分钟）…';
-  try {
-    var j = await (await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({embed_model: id})})).json();
-    if (j.ok){
-      res.className='result ok'; res.textContent='已切换为：' + j.data_dir + '（'+ j.embed_model +'）';
-      toast('检索模型已切换');
-      refreshHealth();
-    } else { res.className='result err'; res.textContent='切换失败：' + (j.error||'未知错误'); }
-  } catch(e){ res.className='result err'; res.textContent='请求出错：'+e.message; }
 }
 
 /* ---------- 百科 ---------- */
@@ -1600,4 +1570,3 @@ if (loreSearchInp){
 window.addEventListener('resize', fitHomeWatermark);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHomeWatermark);
 refreshHealth();
-loadModels();

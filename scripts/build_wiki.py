@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""从设定库(lore/meta.json)结构化提取百科条目 -> data/wiki.json
+"""从 Jina 设定库(lore/meta.json)结构化提取百科条目 -> data_jina2/wiki.json
 用法：python scripts/build_wiki.py
 """
 import json
@@ -87,7 +87,7 @@ def main():
             entries.setdefault(cat, {})[name] = {"name": name, "desc": desc, "section": section, "sub": sub}
     out = {cat: sorted(v.values(), key=lambda e: len(e["desc"]), reverse=True) for cat, v in entries.items()}
     stats = {cat: len(v) for cat, v in out.items()}
-    with open(str(BASE / "data" / "wiki.json"), "w", encoding="utf-8") as f:
+    with open(str(BASE / "data_jina2" / "wiki.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
     print("stats:", stats)
     for cat in ("蛊虫", "人物", "势力", "仙蛊屋"):

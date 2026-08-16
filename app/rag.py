@@ -82,16 +82,8 @@ class Retriever:
 
     def _embed(self, text):
         if self._embedder is None:
-            if "bge-m3" in self.model_name.lower():
-                from .embed import BgeM3Embedder
-                self._embedder = BgeM3Embedder(os.path.join(self.cache_dir, "bge-m3-onnx"))
-                self._m3 = True
-            else:
-                from fastembed import TextEmbedding
-                self._embedder = TextEmbedding(model_name=self.model_name, cache_dir=self.cache_dir)
-                self._m3 = False
-        if getattr(self, "_m3", False):
-            return self._embedder.embed(text)
+            from fastembed import TextEmbedding
+            self._embedder = TextEmbedding(model_name=self.model_name, cache_dir=self.cache_dir)
         v = np.asarray(list(self._embedder.embed([text]))[0], dtype=np.float32)
         return v / (np.linalg.norm(v) + 1e-9)
 

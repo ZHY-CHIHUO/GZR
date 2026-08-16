@@ -19,13 +19,14 @@ MODEL = os.getenv(
 ).strip()
 TOP_K = int(os.getenv("RAG_TOP_K", "5"))
 EXCERPT_CHARS = int(os.getenv("RAG_EXCERPT_CHARS", "600"))
-DATA_DIR = BASE / os.getenv("RAG_DATA_DIR", "data")
+# 检索库固定为 Jina 中文增强版本；项目不再保留可切换的其他向量模型。
+DATA_DIR = BASE / "data_jina2"
 MODEL_CACHE = BASE / os.getenv("RAG_MODEL_CACHE_DIR", "model_cache")
 
 
 def _set_env_var(name: str, value: str) -> None:
     """写回 .env（替换或追加），并同步内存。"""
-    global KEY, BASE_URL, MODEL, DATA_DIR
+    global KEY, BASE_URL, MODEL
     lines = []
     if ENV_FILE.exists():
         lines = ENV_FILE.read_text(encoding="utf-8").splitlines()
@@ -44,8 +45,6 @@ def _set_env_var(name: str, value: str) -> None:
         BASE_URL = value.strip()
     elif name == "AI_MODEL":
         MODEL = value.strip()
-    elif name == "RAG_DATA_DIR":
-        DATA_DIR = BASE / value.strip()
 
 
 def set_api_key(key: str) -> None:
@@ -58,18 +57,3 @@ def set_base_url(base_url: str) -> None:
 
 def set_model(model: str) -> None:
     _set_env_var("AI_MODEL", model.strip() or "deepseek-chat")
-
-
-# 检索模型选项：id -> 相对数据目录
-DATA_DIR_OPTIONS = {
-    "small": "data",
-    "m3": "data_m3",
-    "jina": "data_jina2",
-}
-
-
-def set_data_dir(key: str):
-    """按模型 id 切换数据目录并写回 .env；返回新 DATA_DIR。"""
-    rel = DATA_DIR_OPTIONS.get(key, key)
-    _set_env_var("RAG_DATA_DIR", rel)
-    return DATA_DIR

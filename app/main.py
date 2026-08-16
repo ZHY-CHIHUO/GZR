@@ -62,7 +62,6 @@ class SettingsReq(BaseModel):
     api_key: str | None = None
     base_url: str | None = None
     model: str | None = None
-    embed_model: str | None = None   # small / m3 / jina
 
 
 class TestReq(BaseModel):
@@ -644,16 +643,10 @@ def save_settings(req: SettingsReq):
         config.set_base_url(req.base_url)
     if req.model is not None:
         config.set_model(req.model)
-    if req.embed_model is not None:
-        config.set_data_dir(req.embed_model)
-        try:
-            reload_retriever()
-        except Exception as e:
-            return JSONResponse({"ok": False, "error": f"模型切换失败：{e}"}, status_code=500)
     return {
         "ok": True, "has_key": bool(config.KEY), "base_url": config.BASE_URL,
         "model": config.MODEL,
-        "data_dir": str(config.DATA_DIR), "embed_model": str(config.DATA_DIR),
+        "data_dir": str(config.DATA_DIR), "embed_model": retriever.model_name if retriever else "",
     }
 
 
@@ -683,46 +676,6 @@ def test_settings(req: TestReq):
         }
     except Exception as e:
         return {"ok": False, "error": str(e)[:300], "message": "连接失败"}
-
-
-# ---------- 检索模型选项 ----------
-
-@app.get("/api/models")
-def list_models():
-    import json as _json
-    results = {}
-    erp = Path(__file__).resolve().parent.parent / "eval_results.json"
-    if erp.is_file():
-        try:
-            results = _json.loads(erp.read_text(encoding="utf-8"))
-        except Exception:
-            results = {}
-    options = []
-    label_map = {
-        "data": "标准（bge-small-zh-v1.5，最快）",
-        "data_m3": "更准（BGE-M3 1024维）",
-        "data_jina2": "中文增强（jina-v2-base-zh）",
-    }
-    for key, rel in config.DATA_DIR_OPTIONS.items():
-        d = config.BASE / rel
-        info_p = d / "info.json"
-        if not info_p.is_file():
-            continue
-        try:
-            info = _json.loads(info_p.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        ev = results.get(rel, {})
-        options.append({
-            "id": key, "dir": rel, "model": info.get("model", ""),
-            "label": label_map.get(rel, rel),
-            "dim": info.get("shapes", {}).get("novel", [0, 0])[1],
-            "count": info.get("n", 0),
-            "available": True,
-            "hit5": ev.get("hit5"), "avg_query_s": ev.get("avg_query_s"),
-            "current": rel == config.DATA_DIR.name,
-        })
-    return {"options": options, "current": config.DATA_DIR.name}
 
 
 # ---------- 百科与游戏 ----------
@@ -775,13 +728,8 @@ def _load_content():
     global _wiki, _quiz, _content_mtime
 
     def _resolve(key):
-        # 统一位置：data/ 为唯一权威文件；仅当不存在时回退到当前模型目录（历史兼容）
-        p = config.BASE / "data" / f"{key}.json"
-        if not p.is_file():
-            alt = config.DATA_DIR / f"{key}.json"
-            if alt.is_file():
-                return alt
-        return p
+        # 资料与向量库统一存放在固定的 Jina 数据目录。
+        return config.DATA_DIR / f"{key}.json"
 
     targets = (
         ("wiki", _resolve("wiki"), "_wiki"),
@@ -836,7 +784,7 @@ class WikiEntryReq(BaseModel):
 def wiki_update(req: WikiEntryReq):
     """编辑/删除百科条目，直接写回资料库 wiki.json（所有数据目录同步）。"""
     _load_content()
-    path = config.BASE / "data" / "wiki.json"
+    path = config.DATA_DIR / "wiki.json"
     if not path.is_file():
         return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
     try:
@@ -928,7 +876,7 @@ def wiki_trash_list():
 def wiki_restore(req: WikiTrashReq):
     """把回收站里的词条恢复到原分类。"""
     _load_content()
-    path = config.BASE / "data" / "wiki.json"
+    path = config.DATA_DIR / "wiki.json"
     if not path.is_file():
         return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
     try:
@@ -959,7 +907,7 @@ def wiki_restore(req: WikiTrashReq):
 def wiki_trash_purge(req: WikiTrashReq):
     """从回收站彻底删除（不可恢复）。"""
     _load_content()
-    path = config.BASE / "data" / "wiki.json"
+    path = config.DATA_DIR / "wiki.json"
     if not path.is_file():
         return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
     try:

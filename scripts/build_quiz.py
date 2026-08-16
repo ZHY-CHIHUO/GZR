@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""从 wiki.json 自动生成题库 -> data/quiz.json（选择题 + 猜谜池，无需 LLM，零成本）
+"""从 Jina 知识库 wiki.json 自动生成题库 -> data_jina2/quiz.json（选择题 + 猜谜池，无需 LLM，零成本）
 用法：python scripts/build_quiz.py
 """
 import json
@@ -16,7 +16,7 @@ TYPE_RE = re.compile(r"([\u4e00-\u9fa5]{1,4}类)蛊虫")
 
 
 def main():
-    wiki = json.load(open(str(BASE / "data" / "wiki.json"), encoding="utf-8"))
+    wiki = json.load(open(str(BASE / "data_jina2" / "wiki.json"), encoding="utf-8"))
     random.seed(20260815)
 
     quiz = []
@@ -238,7 +238,7 @@ def main():
     }
 
     out = {"quiz": quiz, "riddles": riddles}
-    with open(str(BASE / "data" / "quiz.json"), "w", encoding="utf-8") as f:
+    with open(str(BASE / "data_jina2" / "quiz.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
     print(f"quiz: {len(quiz)} 题  (蛊虫 {sum(1 for x in quiz if x['type']=='蛊虫')} / 人物 {sum(1 for x in quiz if x['type']=='人物')} / 类型 {sum(1 for x in quiz if x['type']=='蛊虫类型')})")
     print("riddles:", {k: len(v) for k, v in riddles.items()})
