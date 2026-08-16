@@ -100,8 +100,8 @@ class Retriever:
         qt = bigram_tokens(query)
         hits = []
         if scope in ("all", "novel") and "novel" in self.stores:
-            # 正文为主；摘要库小、库内排名不可跨库比较，仅作补位且需过相似度门槛
-            n_need = max(1, k - 2) if scope == "all" else k
+            # 正文为主；保证正文至少有充足的候选（scope=all 时取 k 条正文再融合设定与百科）
+            n_need = k if scope == "novel" else max(k, 5)
             merged = list(self.stores["novel"].search(qv, qt, n_need))
             for h in merged:
                 h["_store"] = "novel"
