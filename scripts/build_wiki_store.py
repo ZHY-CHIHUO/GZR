@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-"""把百科词条建成向量子库 wiki/（novel/lore 之外的第四个库）。
-输出：{data, data_jina2}/wiki/vectors.npy + meta.json
+"""把百科词条建成 Jina 向量子库 wiki/（novel/lore 之外的第四个库）。
+输出：data_jina2/wiki/vectors.npy + meta.json
 用法：python scripts/build_wiki_store.py
+说明：当前运行时固定使用 Jina 中文增强索引；不再重建标准 data/wiki，避免重复耗时。
 """
 import json
 import sys
@@ -55,6 +56,5 @@ def build_for(dirname):
 
 if __name__ == "__main__":
     t0 = time.time()
-    for d in ("data", "data_jina2"):
-        build_for(d)
+    build_for("data_jina2")
     print("done in", round(time.time() - t0, 1), "s")
