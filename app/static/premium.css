@@ -513,10 +513,11 @@ body > header{
 #tab-wiki .wiki-hero::after{ content:none !important; display:none !important; }
 
 
-/* ---------- 百科分类卡片：整齐高级排版（四列对称自适应） ---------- */
+/* ---------- 百科分类卡片：编辑式非对称拼贴 ---------- */
 #tab-wiki .wiki-category-grid{
   display:grid !important;
-  grid-template-columns:repeat(4, minmax(0, 1fr)) !important;
+  grid-template-columns:repeat(12, minmax(0, 1fr)) !important;
+  grid-auto-flow:row dense !important;
   gap:12px !important;
   border:none !important;
   background:transparent !important;
@@ -524,22 +525,32 @@ body > header{
 }
 #tab-wiki .wiki-category-card,
 #tab-wiki .wiki-category-card:nth-child(n){
-  grid-column:auto !important;
-  min-height:110px !important;
-  padding:16px 18px !important;
+  grid-column:span 4 !important;
+  min-height:116px !important;
+  padding:17px 19px !important;
   border:1px solid #DFDDD3 !important;
   border-radius:6px !important;
-  background:#FCFBF7 !important;
+  background:#F3F1EA !important;
   display:flex !important;
   flex-direction:column !important;
   justify-content:space-between !important;
   box-sizing:border-box !important;
-  transition:border-color .18s var(--ease), background .18s var(--ease) !important;
 }
-#tab-wiki .wiki-category-card:hover{
-  border-color:#A93B2A !important;
-  background:#FAF8F2 !important;
-}
+/* 每一行刻意错落，保留目录页的编辑感，而不是仪表盘式等宽方格。 */
+#tab-wiki .wiki-category-card:nth-child(1){ grid-column:span 5 !important; min-height:142px !important; background:#ECE9E0 !important; }
+#tab-wiki .wiki-category-card:nth-child(2){ grid-column:span 3 !important; }
+#tab-wiki .wiki-category-card:nth-child(3){ grid-column:span 4 !important; min-height:142px !important; background:#F8F6F0 !important; }
+#tab-wiki .wiki-category-card:nth-child(4){ grid-column:span 3 !important; }
+#tab-wiki .wiki-category-card:nth-child(5){ grid-column:span 5 !important; min-height:132px !important; background:#ECE9E0 !important; }
+#tab-wiki .wiki-category-card:nth-child(6){ grid-column:span 4 !important; }
+#tab-wiki .wiki-category-card:nth-child(7){ grid-column:span 4 !important; min-height:130px !important; background:#F8F6F0 !important; }
+#tab-wiki .wiki-category-card:nth-child(8){ grid-column:span 3 !important; }
+#tab-wiki .wiki-category-card:nth-child(9){ grid-column:span 5 !important; background:#ECE9E0 !important; }
+#tab-wiki .wiki-category-card:nth-child(10){ grid-column:span 5 !important; min-height:128px !important; }
+#tab-wiki .wiki-category-card:nth-child(11){ grid-column:span 4 !important; background:#F8F6F0 !important; }
+#tab-wiki .wiki-category-card:nth-child(12){ grid-column:span 3 !important; }
+/* 名言诗词在最后，以一张更舒展的收束卡片呈现。 */
+#tab-wiki .wiki-category-card:nth-child(13){ grid-column:span 7 !important; min-height:136px !important; background:#ECE9E0 !important; }
 #tab-wiki .wiki-category-index{
   font-family:Arial, sans-serif !important;
   font-size:11px !important;
@@ -561,9 +572,7 @@ body > header{
   color:#7A766E !important;
   margin-top:6px !important;
 }
-#tab-wiki .wiki-category-card i{
-  display:none !important;
-}
+#tab-wiki .wiki-category-card i{ display:none !important; }
 #tab-wiki .wiki-category-card .wiki-card-mark{
   font-family:"CaoTanZhai Mao Local", "KaiTi", cursive !important;
   font-size:72px !important;
@@ -571,19 +580,25 @@ body > header{
   right:10px !important;
   bottom:-4px !important;
 }
-#tab-wiki .wiki-category-card:hover .wiki-card-mark{
-  color:rgba(169,59,42,.08) !important;
-}
 
 @media(max-width: 1024px){
-  #tab-wiki .wiki-category-grid{
-    grid-template-columns:repeat(3, minmax(0, 1fr)) !important;
-  }
+  #tab-wiki .wiki-category-grid{ grid-template-columns:repeat(6, minmax(0, 1fr)) !important; }
+  #tab-wiki .wiki-category-card:nth-child(n){ grid-column:span 3 !important; min-height:118px !important; }
+  #tab-wiki .wiki-category-card:nth-child(1),
+  #tab-wiki .wiki-category-card:nth-child(5),
+  #tab-wiki .wiki-category-card:nth-child(9),
+  #tab-wiki .wiki-category-card:nth-child(13){ grid-column:span 4 !important; }
+  #tab-wiki .wiki-category-card:nth-child(3),
+  #tab-wiki .wiki-category-card:nth-child(7),
+  #tab-wiki .wiki-category-card:nth-child(11){ grid-column:span 2 !important; }
 }
 @media(max-width: 720px){
-  #tab-wiki .wiki-category-grid{
-    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
-  }
+  #tab-wiki .wiki-category-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)) !important; }
+  #tab-wiki .wiki-category-card:nth-child(n){ grid-column:span 1 !important; min-height:112px !important; }
+  #tab-wiki .wiki-category-card:nth-child(1),
+  #tab-wiki .wiki-category-card:nth-child(5),
+  #tab-wiki .wiki-category-card:nth-child(9),
+  #tab-wiki .wiki-category-card:nth-child(13){ grid-column:span 2 !important; min-height:124px !important; }
 }
 
 /* 百科分类/条目卡片保持静态：不抬升、不变黑、不加阴影 */
@@ -595,7 +610,6 @@ body > header{
 }
 #tab-wiki .wiki-category-card,
 #tab-wiki .wiki-category-card:nth-child(n){
-  background:#F3F1EA !important;
   color:#171715 !important;
 }
 #tab-wiki .wiki-entry-card{ background:#FDFCF8 !important; color:#171715 !important; }
