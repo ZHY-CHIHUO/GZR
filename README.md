@@ -28,10 +28,12 @@
 - **内置内容**：运行环境（Python + 依赖）、两套向量库、检索模型、小说全文 2335 章、插图 PDF、设定合集——**完全离线可用**
 - **使用方式**：解压 → 双击 `gu-zhen-ren-rag\一键启动.bat` → 浏览器自动打开
 - **压缩包内有说明**：解压后先看根目录的 `00-先看这里.txt`
-- **哪里拿（Release 下载）**：便携包体积约 360MB，不能直接放进代码仓库，而是挂在**仓库的 Release（版本发布页）**上，两种方式进入：
-  1. 直接打开：<https://github.com/ZHY-CHIHUO/GZR/releases/tag/v1.0.0>
-  2. 从仓库进入：打开 <https://github.com/ZHY-CHIHUO/GZR> → 页面**右侧的「Releases」**（版本发布）→ 点 **v1.0.0** → 下载附件 **`GZR-portable-v1.0.0.zip`**（约 358MB）
-  > 页面上另外两个 “Source code (zip / tar.gz)” 是 GitHub 自动生成的源码包，**不是便携版，忽略即可**。
+- **哪里拿（下载渠道）**：便携包体积约 360MB，不能直接放进代码仓库，通过以下渠道获取：
+  1. **百度网盘（国内，推荐）**：链接与提取码见发布说明（向发布者索取）
+  2. **GitHub Release**：
+     - 直接打开：<https://github.com/ZHY-CHIHUO/GZR/releases/tag/v1.0.0>
+     - 或：打开 <https://github.com/ZHY-CHIHUO/GZR> → 页面**右侧的「Releases」** → 点 **v1.0.0** → 下载附件 **`GZR-portable-v1.0.0.zip`**（约 358MB）
+     - 页面上另外两个 “Source code (zip / tar.gz)” 是 GitHub 自动生成的源码包，**不是便携版，忽略即可**
 - **注意**：便携包基于本机 Python 打包，适合直接拷贝使用；换电脑建议用下方「快速开始」的仓库版（任何电脑装一次 Python 即可）
 
 ## 快速开始（新手 3 分钟）
