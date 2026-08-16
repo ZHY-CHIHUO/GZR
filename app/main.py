@@ -313,13 +313,15 @@ def ask(req: AskReq):
         shown_sources = web_sources
     else:
         shown_sources = [format_source(h) for h in hits] + web_sources
+    # 相关词条：通用知识或网络回答时，从回答与问题中提取提及的百科词条（长名优先），让用户依然可以直接跳转百科
+    wiki_cites = _wiki_cites_in(answer + " " + q)
     return {
         "answer": answer,
         "sources": shown_sources,
         "cost_rmb": estimate_cost(system, user, answer) if not mock else 0.0,
         "mock": mock,
         "web": web_used,
-        "wiki_cites": _wiki_cites_in(answer) if (combined or not web_used and not gen_knowledge) else [],
+        "wiki_cites": wiki_cites,
     }
 
 
