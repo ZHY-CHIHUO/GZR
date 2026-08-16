@@ -40,7 +40,7 @@ class Store:
         idx = np.argsort(-scores)[:k]
         return {int(i): r + 1 for r, i in enumerate(idx)}
 
-    def search(self, qv, qt, k, dense_k=20, bm25_k=20):
+    def search(self, qv, qt, k, dense_k=30, bm25_k=40):
         d = self._dense_ranks(qv, dense_k)
         b = self._bm25_ranks(qt, bm25_k)
         fused = []
@@ -49,7 +49,9 @@ class Store:
             if i in d:
                 score += 1.0 / (60 + d[i])
             if i in b:
-                score += 1.0 / (60 + b[i])
+                # 关键词精确匹配（当出现像原著诗句、名场面字面完全命中的 Top 1~3 时，给予强置信度加权）
+                bm_boost = 2.5 if b[i] <= 3 else 1.5
+                score += bm_boost / (60 + b[i])
             fused.append((i, score))
         fused.sort(key=lambda x: -x[1])
         out = []
