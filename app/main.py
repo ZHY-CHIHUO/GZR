@@ -247,6 +247,59 @@ def _force_wiki_hits(q, hits, limit=3):
     return out
 
 
+def _exact_wiki_hits(q, limit=3):
+    """字面命中百科正文时强制召回，避免短诗句被向量相似度阈值过滤。"""
+    query = (q or "").strip()
+    if len(query) < 2:
+        return []
+    try:
+        _load_content()
+    except Exception:
+        return []
+    out = []
+    for cat, entries in (_wiki or {}).items():
+        if cat == "_deleted":
+            continue
+        for entry in entries:
+            text = str(entry.get("desc") or "")
+            pos = text.find(query)
+            if pos < 0:
+                continue
+            start, end = max(0, pos - 72), min(len(text), pos + len(query) + 144)
+            excerpt = " ".join(text[start:end].split())
+            out.append({
+                "type": "wiki", "name": entry.get("name", ""), "cat": cat,
+                "section": entry.get("section", ""), "sub": entry.get("sub", ""),
+                "text": text, "_exact_excerpt": excerpt,
+            })
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def _collection_poetry_response(query: str):
+    """精确命中书友二创诗词时直接给出来源与性质，防止误报“资料库没有”。"""
+    matches = [h for h in _exact_wiki_hits(query) if "书友二创" in (h.get("text") or "")]
+    if not matches:
+        return None
+    hit = matches[0]
+    text = hit["text"]
+    poem = ""
+    m = re.search(r"【诗词内容】\s*(.*?)(?:\s*【背景说明】|$)", text, re.S)
+    if m:
+        poem = m.group(1).strip()
+    label = hit.get("sub") or hit.get("name") or "相关赞诗"
+    quoted_poem = "> " + poem.replace("\n", "\n> ") + "\n\n" if poem else ""
+    answer = (f"“{query}”**不是《蛊真人》原著正文**。\n\n"
+              f"它收录在《蛊真人》资料合集的「第十三章十尊者诗」，属于**书友二创 / 尊者赞诗**："
+              f"**{label}**。\n\n"
+              + quoted_poem
+              + "因此可作为资料合集与百科收录内容查阅，但不能标注或回答为原著原文。")
+    source = format_source(dict(hit, text=hit.get("_exact_excerpt") or text))
+    source["label"] = f"百科词条《{hit.get('name')}》（书友二创，非原著）"
+    return {"answer": answer, "sources": [source], "wiki_cites": [{"name": hit.get("name"), "cat": hit.get("cat")}]}
+
+
 def _retry_extra(q, hits, scope):
     """补救检索：用问题中出现的词条名在正文/设定里再找相关片段。"""
     try:
@@ -324,6 +377,12 @@ def _first_occurrence_response(query: str, is_regex: bool = False):
         return {"answer": f"原文正则表达式有误：{e}", "sources": [],
                 "exact_lookup": {"query": query, "found": False, "error": str(e)}}
     if not found["results"]:
+        collection = _collection_poetry_response(query)
+        if collection:
+            collection["answer"] = (f"我已按卷、章顺序对《蛊真人》原著正文做精确全文检索，未找到“{query}”。\n\n"
+                                    + collection["answer"])
+            collection["exact_lookup"] = {"query": query, "found": False, "original_found": False}
+            return collection
         return {
             "answer": f"我已按卷、章顺序对原著正文做精确全文检索，未找到“{query}”。\n\n"
                       "这表示当前本地原文库中没有该连续文本；可尝试缩短片段、检查异体字或改用阅读页的正则搜索。",
@@ -374,8 +433,16 @@ def ask(req: AskReq):
         if last_user and last_user != q:
             search_q = (last_user[:30] + " " + q).strip()
 
+    # 对资料合集中的二创诗词做字面证据路由：短句必须先说明“收录但非原著”，不能被向量阈值漏掉后联网猜测。
+    collection = _collection_poetry_response(q)
+    if collection:
+        return {**collection, "cost_rmb": 0.0, "mock": False, "web": False}
     # 一次检索（普通 + 追问增强 + 词条名强制召回 + 词条名原文补充）
     hits = _force_wiki_hits(q, retriever.search(search_q, scope=req.scope))
+    exact_wiki = _exact_wiki_hits(q)
+    for hit in exact_wiki:
+        if not any(h.get("type") == "wiki" and h.get("name") == hit.get("name") and h.get("sub") == hit.get("sub") for h in hits):
+            hits.insert(0, hit)
     hits = hits + _retry_extra(q, hits, req.scope)
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
     # 联网能力并入首次调用：资料库能答就答，答不了让模型直接联网（省一次调用）
