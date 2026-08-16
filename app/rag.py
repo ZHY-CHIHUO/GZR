@@ -218,7 +218,7 @@ def ask_llm(system, user, api_key, base_url, model, history=None):
         model=model,
         messages=messages,
         temperature=0.4,
-        max_tokens=1024,
+        max_tokens=4096,
     )
     return resp.choices[0].message.content or ""
 
@@ -246,7 +246,7 @@ def _chat_web(system, user, api_key, base_url, model, history=None):
         tools=[{"type": "web_search"}],
         tool_choice="auto",
         temperature=0.4,
-        max_tokens=1100,
+  max_tokens=4096,
     )
     msg = resp.choices[0].message
     text = (msg.content or "").strip()
