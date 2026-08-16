@@ -64,8 +64,8 @@ button, input, select, textarea,
 ::-webkit-scrollbar-thumb:hover{ background:rgba(122,118,110,.5); }
 :focus-visible{ outline:1.5px solid var(--gold); outline-offset:2px; }
 
-/* ---------- 头部：毛玻璃 + 印章 ---------- */
-header{
+/* ---------- 头部：毛玻璃 + 印章（仅作用于全局顶栏，不影响页面内部的 header 标签） ---------- */
+body > header{
   position:sticky; top:0; z-index:40;
   background:rgba(248,247,243,.82);
   -webkit-backdrop-filter:saturate(140%) blur(14px);
@@ -178,6 +178,15 @@ footer.chat-bar{
 .wiki-item{ transition:background .14s var(--ease); }
 .wiki-item.active{ background:linear-gradient(90deg, rgba(169,59,42,.07), transparent) !important; box-shadow:inset 2px 0 0 var(--accent); }
 .wiki-detail .wiki-item-name, .wiki-detail-name{ letter-spacing:3px; color:var(--ink-deep); }
+/* 彻底取消百科词条标题和头部区域的任何吸顶/悬浮行为，随正文自然滚动 */
+.wiki-article-head{
+  position:static !important;
+  top:auto !important;
+  z-index:auto !important;
+  box-shadow:none !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
 .wiki-sub.active{ background:var(--ink-deep) !important; color:#F5F3EC !important; }
 
 /* ---------- 游戏 ---------- */
@@ -236,7 +245,7 @@ input:focus, select:focus, textarea:focus{
    ============================================================ */
 
 /* 去掉毛玻璃：顶栏与百科区域都改为实色宣纸，不透明、不模糊 */
-header{
+body > header{
   background:#F8F7F3;
   -webkit-backdrop-filter:none;
   backdrop-filter:none;
