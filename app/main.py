@@ -214,8 +214,15 @@ def ask(req: AskReq):
         return JSONResponse({"error": "问题不能为空"}, status_code=400)
     if retriever is None:
         return JSONResponse({"error": "检索库未加载"}, status_code=503)
-    # 一次检索（普通 + 词条名强制召回 + 词条名原文补充）合并完成
-    hits = _force_wiki_hits(q, retriever.search(q, scope=req.scope))
+    # 多轮追问时，结合上一轮用户提问增强短句/代词检索（如上一问是诗句，下一问“这句呢”或“在哪一章”）
+    search_q = q
+    if req.history and len(q) <= 15:
+        last_user = next((h.get("content", "") for h in reversed(req.history) if h.get("role") == "user"), "")
+        if last_user and last_user != q:
+            search_q = (last_user[:30] + " " + q).strip()
+
+    # 一次检索（普通 + 追问增强 + 词条名强制召回 + 词条名原文补充）
+    hits = _force_wiki_hits(q, retriever.search(search_q, scope=req.scope))
     hits = hits + _retry_extra(q, hits, req.scope)
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
     # 联网能力并入首次调用：资料库能答就答，答不了让模型直接联网（省一次调用）
