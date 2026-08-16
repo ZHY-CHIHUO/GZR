@@ -506,6 +506,80 @@ body > header{
 /* 删除 hero 右下角“第一卷 · 设定档案”装饰文字 */
 #tab-wiki .wiki-hero::after{ content:none !important; display:none !important; }
 
+
+/* ---------- 百科分类卡片：整齐高级排版（四列对称自适应） ---------- */
+#tab-wiki .wiki-category-grid{
+  display:grid !important;
+  grid-template-columns:repeat(4, minmax(0, 1fr)) !important;
+  gap:12px !important;
+  border:none !important;
+  background:transparent !important;
+  margin-top:16px !important;
+}
+#tab-wiki .wiki-category-card,
+#tab-wiki .wiki-category-card:nth-child(n){
+  grid-column:auto !important;
+  min-height:110px !important;
+  padding:16px 18px !important;
+  border:1px solid #DFDDD3 !important;
+  border-radius:6px !important;
+  background:#FCFBF7 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:space-between !important;
+  box-sizing:border-box !important;
+  transition:border-color .18s var(--ease), background .18s var(--ease) !important;
+}
+#tab-wiki .wiki-category-card:hover{
+  border-color:#A93B2A !important;
+  background:#FAF8F2 !important;
+}
+#tab-wiki .wiki-category-index{
+  font-family:Arial, sans-serif !important;
+  font-size:11px !important;
+  font-weight:700 !important;
+  color:#A93B2A !important;
+  letter-spacing:1px !important;
+  margin-bottom:6px !important;
+}
+#tab-wiki .wiki-category-card strong{
+  font-family:"KaiTi", "STKaiti", "Songti SC", serif !important;
+  font-size:20px !important;
+  font-weight:700 !important;
+  color:#151513 !important;
+  letter-spacing:1.5px !important;
+  line-height:1.2 !important;
+}
+#tab-wiki .wiki-category-card span:not(.wiki-category-index):not(.wiki-card-mark){
+  font-size:12px !important;
+  color:#7A766E !important;
+  margin-top:6px !important;
+}
+#tab-wiki .wiki-category-card i{
+  display:none !important;
+}
+#tab-wiki .wiki-category-card .wiki-card-mark{
+  font-family:"CaoTanZhai Mao Local", "KaiTi", cursive !important;
+  font-size:72px !important;
+  color:rgba(0,0,0,.035) !important;
+  right:10px !important;
+  bottom:-4px !important;
+}
+#tab-wiki .wiki-category-card:hover .wiki-card-mark{
+  color:rgba(169,59,42,.08) !important;
+}
+
+@media(max-width: 1024px){
+  #tab-wiki .wiki-category-grid{
+    grid-template-columns:repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+@media(max-width: 720px){
+  #tab-wiki .wiki-category-grid{
+    grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 /* 百科分类/条目卡片保持静态：不抬升、不变黑、不加阴影 */
 #tab-wiki .wiki-category-card,
 #tab-wiki .wiki-entry-card{
