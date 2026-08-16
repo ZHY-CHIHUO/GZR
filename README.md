@@ -20,40 +20,64 @@
 - 🔌 **连接配置**：设置页可填写任意 OpenAI 兼容服务的 Base URL、API Key 和模型名，并在保存前测试连接
 - 💰 **省钱**：向量库预建好（免费）；每次问答约 1~2 分钱；未配 Key 时自动进入“检索测试模式”
 
-## 快速开始（3 分钟）
+## 快速开始（新手 3 分钟）
 
-> ⚠️ **Windows 必读**：`uvicorn` 装在虚拟环境 `.venv` 里，**不在系统 PATH**。
-> 直接敲 `uvicorn` 会报「'uvicorn' 不是内部或外部命令」——必须先激活 venv，
-> 或直接调用 `.venv\Scripts\uvicorn.exe`（免激活，最稳）。
+> 不用懂任何命令：**装一次 Python，之后每次双击一个文件就能用。**
 
-### 情形 A：已有 .venv（clone 下来 / 之前装过依赖）
+### 第 1 步：安装 Python（只装一次）
+
+1. 打开 <https://www.python.org/downloads/> ，点黄色大按钮下载；
+2. 双击安装包，**务必勾选** “Add Python to PATH”（加入系统路径），再一路点 Next；
+3. 装完即可，以后不用再管它。
+
+> 不确定装没装过？直接做第 2 步，脚本会帮你检查并提示。
+
+### 第 2 步：双击启动
+
+1. 把项目文件夹放到任意位置（路径里**不要有中文**，例如 `D:\gzr`）；
+2. 双击文件夹里的 **`一键启动.bat`**；
+3. 第一次运行会自动完成三件事（约 3 分钟，需要联网）：
+   - 创建运行环境；
+   - 安装依赖；
+   - 下载约 90MB 的检索模型（只需一次）。
+4. 以后每次使用，双击同一个文件，几秒就打开。
+
+### 第 3 步：开始使用
+
+- 浏览器会自动打开 **http://127.0.0.1:8000**（没自动打开就手动输入这个地址）；
+- **不填任何 Key 也能用**：百科、阅读器、小游戏、检索测试（能看到每个问题命中了哪些章节）；
+- 想让 AI 真正回答问题：页面右上角「设置」→ 填 Base URL / API Key / 模型名 → 「测试连接」→ 保存（任意 OpenAI 兼容服务都行，如 DeepSeek）；
+- 用完直接**关掉黑色窗口**就是停止服务。
+
+### 常见问题
+
+| 现象 | 解决 |
+|---|---|
+| 提示找不到 Python | 做第 1 步；装完重新双击 |
+| 提示依赖安装失败 | 网络问题，稍后再双击；还不行删掉 `.venv` 文件夹重试 |
+| 端口 8000 被占用 | 右键编辑 `一键启动.bat`，把 `--port 8000` 改成 `--port 8001`，浏览器访问 8001 |
+| 想更新代码后重装依赖 | 删掉 `.venv\.deps_ok` 再双击 |
+
+### 高级用户：命令行方式（可选）
+
+不习惯双击脚本，也可以在 PowerShell / CMD 里手动执行：
 
 ```bash
-cd gu-zhen-ren-rag
-
-# 直接启动（推荐，Windows 免激活）：
-.venv\Scripts\uvicorn app.main:app --port 8000
-
-# 或先激活再启动（cmd：activate；PowerShell：Activate.ps1）：
-.venv\Scripts\activate
-uvicorn app.main:app --port 8000
-```
-
-### 情形 B：从零开始（首次搭建）
-
-```bash
-cd gu-zhen-ren-rag
+cd 项目目录
 python -m venv .venv
-.venv\Scripts\activate          # Windows（PowerShell 用 .venv\Scripts\Activate.ps1）
+.venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn app.main:app --port 8000
 ```
 
-- 浏览器打开 http://localhost:8000（不填 Key 也能用：页面显示“检索测试模式”，可看到每个问题检索到了哪些章节）
-- 端口被占用时换一个：`.venv\Scripts\uvicorn app.main:app --port 8001`
-- 连接 AI（两种方式任选）：
-  ① 网页「设置」页 → 填写 Base URL、API Key、模型名 → 测试并保存（推荐，免重启）
-  ② 手动：copy .env.example .env → 编辑 AI_API_KEY / AI_BASE_URL / AI_MODEL → 重启服务
+已有环境则直接：
+
+```bash
+cd 项目目录
+.venv\Scripts\uvicorn app.main:app --port 8000
+```
+
+浏览器打开 http://localhost:8000；端口被占用换 `--port 8001`。
 
 ## 项目结构
 
