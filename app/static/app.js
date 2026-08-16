@@ -1403,10 +1403,129 @@ function clearChat(){
 }
 
 /* ---------- 启动 ---------- */
+
+/* ---------- 原著正文精准查找 & 正则搜索 ---------- */
+var NOVEL_SEARCH_ACTIVE = false;
+
+async function doNovelSearch(){
+  var input = $('novel-search-input');
+  var q = (input ? input.value : '').trim();
+  if (!q){
+    clearNovelSearch();
+    return;
+  }
+  var isRegex = $('novel-search-regex') ? $('novel-search-regex').checked : false;
+  var curVolOnly = $('novel-search-cur-vol') ? $('novel-search-cur-vol').checked : false;
+  var targetVol = curVolOnly ? CUR_VOL : null;
+  
+  var resBox = $('novel-search-results');
+  var tocBody = $('novel-toc-body');
+  if (resBox){
+    resBox.hidden = false;
+    resBox.innerHTML = '<div class="empty">正在全书检索中…</div>';
+  }
+  if (tocBody) tocBody.hidden = true;
+  NOVEL_SEARCH_ACTIVE = true;
+  
+  try {
+    var resp = await fetch('/api/novel/search', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        query: q,
+        is_regex: isRegex,
+        vol: targetVol,
+        limit: 80
+      })
+    });
+    var j = await resp.json();
+    if (!resp.ok) throw new Error(j.error || ('HTTP ' + resp.status));
+    
+    if (!j.results || !j.results.length){
+      resBox.innerHTML = '<div class="empty">未找到匹配内容<br><span style="font-size:11px;color:var(--muted)">' + (isRegex ? '请检查正则表达式语法' : '可尝试缩短关键词') + '</span></div>';
+      return;
+    }
+    
+    var html = '<div class="novel-search-summary">匹配 <b>' + j.chapters_matched + '</b> 章（共 ' + j.total_matches + ' 处）</div>';
+    html += '<div class="novel-search-list">';
+    j.results.forEach(function(r){
+      html += '<div class="novel-search-item" onclick="openFoundChapter('' + attrEsc(r.vol) + '', ' + r.chapter + ', '' + attrEsc(q) + '', ' + (isRegex ? 'true' : 'false') + ')">';
+      html += '<div class="novel-search-item-head"><strong>' + esc(r.vol) + ' · 第' + r.chapter + '章</strong><span class="count-badge">' + r.count + ' 处</span></div>';
+      html += '<div class="novel-search-item-title">' + esc(r.title) + '</div>';
+      if (r.snippets && r.snippets.length){
+        r.snippets.forEach(function(s){
+          html += '<div class="novel-search-snippet">L' + s.line + ': ' + highlightSearchMatch(s.snippet, q, isRegex) + '</div>';
+        });
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+    resBox.innerHTML = html;
+  } catch(e){
+    resBox.innerHTML = '<div class="empty" style="color:var(--accent)">检索失败：' + esc(e.message) + '</div>';
+  }
+}
+
+function clearNovelSearch(){
+  var input = $('novel-search-input');
+  if (input) input.value = '';
+  var resBox = $('novel-search-results');
+  var tocBody = $('novel-toc-body');
+  if (resBox){
+    resBox.hidden = true;
+    resBox.innerHTML = '';
+  }
+  if (tocBody) tocBody.hidden = false;
+  NOVEL_SEARCH_ACTIVE = false;
+}
+
+function highlightSearchMatch(text, query, isRegex){
+  if (!text) return '';
+  var safe = esc(text);
+  if (!query) return safe;
+  try {
+    var regex = isRegex ? new RegExp('(' + query + ')', 'gi') : new RegExp('(' + escapeRegExp(query) + ')', 'gi');
+    return safe.replace(regex, '<mark class="search-highlight">$1</mark>');
+  } catch(e){
+    return safe;
+  }
+}
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^$\{\}()|[\]\\]/g, '\\$&');
+}
+
+function openFoundChapter(vol, ch, keyword, isRegex){
+  showChapter(vol, ch).then(function(){
+    setTimeout(function(){
+      var pane = $('read-novel').querySelector('.text-pane');
+      if (!pane || !keyword) return;
+      var paras = pane.querySelectorAll('p');
+      var matchedP = null;
+      try {
+        var re = isRegex ? new RegExp('(' + keyword + ')', 'gi') : new RegExp('(' + escapeRegExp(keyword) + ')', 'gi');
+        paras.forEach(function(p){
+          if (re.test(p.textContent)){
+            if (!matchedP) matchedP = p;
+            p.innerHTML = p.textContent.replace(re, '<mark class="search-highlight-live">$1</mark>');
+          }
+        });
+        if (matchedP){
+          matchedP.scrollIntoView({behavior:'smooth', block:'center'});
+        }
+      } catch(e){}
+    }, 180);
+  });
+}
+
 loadChat();
 renderChatNavList();
 renderSuggest();
 $('home-q').addEventListener('keydown', function(e){ if (e.key === 'Enter') askFromHome(); });
+var novelSearchInp = $('novel-search-input');
+if (novelSearchInp){
+  novelSearchInp.addEventListener('keydown', function(e){ if (e.key === 'Enter') doNovelSearch(); });
+}
 window.addEventListener('resize', fitHomeWatermark);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHomeWatermark);
 refreshHealth();

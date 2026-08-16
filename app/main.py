@@ -69,6 +69,110 @@ class TestReq(BaseModel):
     model: str | None = None
 
 
+class NovelSearchReq(BaseModel):
+    query: str
+    is_regex: bool = False
+    vol: str | None = None
+    limit: int = 60
+
+
+@app.post("/api/novel/search")
+def search_novel_text(req: NovelSearchReq):
+    """原著正文全文检索：支持普通关键词精准查找与正则表达式匹配。"""
+    q = (req.query or "").strip()
+    if not q:
+        return {"results": [], "total_matches": 0, "chapters_matched": 0}
+
+    pattern = None
+    if req.is_regex:
+        try:
+            pattern = re.compile(q, re.IGNORECASE)
+        except re.error as e:
+            return JSONResponse({"error": f"正则表达式语法错误：{e}"}, status_code=400)
+
+    root = library.NOVEL_ROOT.resolve()
+    if not root.is_dir():
+        return {"results": [], "total_matches": 0, "chapters_matched": 0}
+
+    results = []
+    total_matches = 0
+
+    for vdir in sorted(os.listdir(root), key=library._natural_key):
+        if req.vol and vdir != req.vol:
+            continue
+        vp = root / vdir
+        if not vp.is_dir():
+            continue
+        for fn in sorted(os.listdir(vp), key=library._natural_key):
+            if not fn.endswith(".txt"):
+                continue
+            fp = vp / fn
+            try:
+                content = fp.read_text(encoding="utf-8")
+            except Exception:
+                continue
+
+            ch_num = 0
+            m_fn = re.match(r"第(\d+)章\.txt", fn)
+            if m_fn:
+                ch_num = int(m_fn.group(1))
+
+            matches_in_ch = []
+            lines = content.splitlines()
+            title = lines[0].strip() if lines else fn
+
+            for line_idx, line in enumerate(lines):
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                if pattern:
+                    found = list(pattern.finditer(line_str))
+                    if found:
+                        for match in found[:3]:
+                            start = max(0, match.start() - 32)
+                            end = min(len(line_str), match.end() + 32)
+                            snippet = line_str[start:end]
+                            matches_in_ch.append({
+                                "line": line_idx + 1,
+                                "snippet": snippet,
+                                "match": match.group(0),
+                            })
+                            total_matches += 1
+                else:
+                    pos = line_str.find(q)
+                    if pos != -1:
+                        start = max(0, pos - 32)
+                        end = min(len(line_str), pos + len(q) + 32)
+                        snippet = line_str[start:end]
+                        matches_in_ch.append({
+                            "line": line_idx + 1,
+                            "snippet": snippet,
+                            "match": q,
+                        })
+                        total_matches += 1
+
+            if matches_in_ch:
+                results.append({
+                    "vol": vdir,
+                    "chapter": ch_num,
+                    "title": title,
+                    "count": len(matches_in_ch),
+                    "snippets": matches_in_ch[:3],
+                })
+                if len(results) >= req.limit:
+                    break
+        if len(results) >= req.limit:
+            break
+
+    return {
+        "results": results,
+        "total_matches": total_matches,
+        "chapters_matched": len(results),
+        "query": q,
+        "is_regex": req.is_regex,
+    }
+
+
 class LocateReq(BaseModel):
     vol: str
     chapter: int

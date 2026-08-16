@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/refine.css?v=3">
 <link rel="stylesheet" href="/static/ink.css?v=3">
 <link rel="stylesheet" href="/static/wiki-browser.css?v=4">
-<link rel="stylesheet" href="/static/premium.css?v=18">
+<link rel="stylesheet" href="/static/premium.css?v=19">
 <script src="/static/pdfjs/pdf.min.js"></script>
 </head>
 <body>
@@ -80,8 +80,23 @@
     </div>
     <div id="read-novel" class="read-pane">
       <div class="toc-pane" id="novel-toc">
-        <div class="toc-head"><span class="toc-title">目录</span><button class="toc-fold" onclick="toggleToc()" title="收起/展开目录">«</button></div>
-        <div class="toc-body"><div class="empty">目录加载中…</div></div>
+        <div class="toc-head">
+          <span class="toc-title">目录</span>
+          <button class="toc-fold" onclick="toggleToc()" title="收起/展开目录">«</button>
+        </div>
+        <div class="novel-search-box">
+          <div class="novel-search-row">
+            <input type="text" id="novel-search-input" placeholder="搜索原著正文（回车执行）" autocomplete="off">
+            <button type="button" id="novel-search-btn" onclick="doNovelSearch()">查找</button>
+          </div>
+          <div class="novel-search-options">
+            <label><input type="checkbox" id="novel-search-regex"> 正则表达式</label>
+            <label><input type="checkbox" id="novel-search-cur-vol"> 仅限当前卷</label>
+            <button type="button" class="novel-search-clear" onclick="clearNovelSearch()">清空</button>
+          </div>
+        </div>
+        <div class="novel-search-results" id="novel-search-results" hidden></div>
+        <div class="toc-body" id="novel-toc-body"><div class="empty">目录加载中…</div></div>
       </div>
       <div class="text-pane"><div class="empty">从左侧选择章节开始阅读</div></div>
     </div>
@@ -345,7 +360,7 @@
 
 <div id="toast"></div>
 
-<script src="/static/app.js?v=13"></script>
-<script src="/static/wiki-browser.js?v=4"></script>
+<script src="/static/app.js?v=14"></script>
+<script src="/static/wiki-browser.js?v=5"></script>
 </body>
 </html>
