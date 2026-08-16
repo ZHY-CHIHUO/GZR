@@ -166,8 +166,12 @@ def format_source(h):
     }
 
 
-def build_prompt(question, hits, excerpt_chars=600):
+def build_prompt(question, hits, excerpt_chars=1200):
     refs = []
+    # 提取问题中的关键短语（如诗句、成语、专名），优先居中截取包含关键词的段落
+    import re
+    keywords = [w for w in re.split(r'[,，.。?？!！\s"“”]+', question) if len(w) >= 2]
+
     for i, h in enumerate(hits, 1):
         if h.get("type") == "wiki":
             label = f"百科词条《{h.get('name')}》"
@@ -175,7 +179,27 @@ def build_prompt(question, hits, excerpt_chars=600):
             label = f"设定集《{h.get('section') or h.get('title')}》"
         else:
             label = f"正文《{h.get('vol')}·第{h.get('chapter')}章·{h.get('title')}》"
-        excerpt = (h.get("text") or "")[:excerpt_chars]
+        full_text = h.get("text") or ""
+        if len(full_text) <= excerpt_chars:
+            excerpt = full_text
+        else:
+            # 尝试定位关键词在整章中的位置，把最相关的上下文切给大模型
+            best_pos = -1
+            for kw in sorted(keywords, key=len, reverse=True):
+                pos = full_text.find(kw)
+                if pos != -1:
+                    best_pos = pos
+                    break
+            if best_pos != -1:
+                start = max(0, best_pos - 300)
+                end = min(len(full_text), start + excerpt_chars)
+                if end - start < excerpt_chars:
+                    start = max(0, end - excerpt_chars)
+                prefix = "..." if start > 0 else ""
+                suffix = "..." if end < len(full_text) else ""
+                excerpt = prefix + full_text[start:end] + suffix
+            else:
+                excerpt = full_text[:excerpt_chars] + "..."
         refs.append(f"[{i}] {label}\n{excerpt}")
     system = (
         "你是《蛊真人》的资深书迷助手，只依据【参考资料】回答，使用简体中文。"
