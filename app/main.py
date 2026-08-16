@@ -247,6 +247,23 @@ def _force_wiki_hits(q, hits, limit=3):
     return out
 
 
+def _is_active_wiki_hit(hit):
+    """向量索引可能尚未重建；只允许当前权威 wiki.json 中仍存在的词条进入 RAG。"""
+    if hit.get("type") != "wiki":
+        return True
+    try:
+        _load_content()
+        name, cat, sub = hit.get("name"), hit.get("cat"), hit.get("sub", "")
+        return any(e.get("name") == name and (not sub or e.get("sub", "") == sub)
+                   for e in (_wiki or {}).get(cat, []))
+    except Exception:
+        return False
+
+
+def _filter_stale_wiki_hits(hits):
+    return [h for h in hits if _is_active_wiki_hit(h)]
+
+
 def _exact_wiki_hits(q, limit=3):
     """字面命中百科正文时强制召回，避免短诗句被向量相似度阈值过滤。"""
     query = (q or "").strip()
@@ -492,6 +509,8 @@ def ask(req: AskReq):
                 "wiki_cites": _wiki_cites_in(q)}
     # 一次检索（普通 + 追问增强 + 词条名强制召回 + 词条名原文补充）
     hits = _force_wiki_hits(q, retriever.search(search_q, scope=req.scope))
+    # 词条在百科被删除后，即使旧向量仍暂存，也绝不能再作为 RAG 证据或来源卡片。
+    hits = _filter_stale_wiki_hits(hits)
     if exact_novel:
         # 多次命中时，最早的实际原文排在 RAG 证据前面，模型不能再说“未收录”。
         seen = {(h.get("vol"), h.get("chapter")) for h in hits}
