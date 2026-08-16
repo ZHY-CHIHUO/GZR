@@ -27,9 +27,9 @@
 
 - **内置内容**：运行环境（Python + 依赖）、两套向量库、检索模型、小说全文 2335 章、插图 PDF、设定合集——**完全离线可用**
 - **使用方式**：解压 → 双击 `gu-zhen-ren-rag\一键启动.bat` → 浏览器自动打开
-- **压缩包内有说明**：解压后先看根目录的 `00-先看这里.txt`
+- **压缩包内有说明**：解压后先看根目录的 `使用说明.txt`
 - **哪里拿（下载渠道）**：便携包体积约 360MB，不能直接放进代码仓库，通过以下渠道获取：
-  1. **百度网盘（国内，推荐）**：链接与提取码见发布说明（向发布者索取）
+  1. **百度网盘（国内，推荐）**：<https://pan.baidu.com/s/1-floFdMAXZJsG3htg1w6gA?pwd=jrz5>　提取码：`jrz5`
   2. **GitHub Release**：
      - 直接打开：<https://github.com/ZHY-CHIHUO/GZR/releases/tag/v1.0.0>
      - 或：打开 <https://github.com/ZHY-CHIHUO/GZR> → 页面**右侧的「Releases」** → 点 **v1.0.0** → 下载附件 **`GZR-portable-v1.0.0.zip`**（约 358MB）
