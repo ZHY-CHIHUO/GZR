@@ -54,6 +54,8 @@ class AskReq(BaseModel):
     scope: str = "all"          # all / novel / lore
     history: list = []          # [{role, content}, ...]
     web_fallback: bool = True   # 检索不到时是否联网搜索（网络回答）
+    first_occurrence: bool = False  # 强制按原著全文顺序定位首次命中
+    original_regex: bool = False    # first_occurrence 时将问题按正则表达式解释
 
 
 class SettingsReq(BaseModel):
@@ -76,29 +78,27 @@ class NovelSearchReq(BaseModel):
     limit: int = 60
 
 
-@app.post("/api/novel/search")
-def search_novel_text(req: NovelSearchReq):
-    """原著正文全文检索：支持普通关键词精准查找与正则表达式匹配。"""
-    q = (req.query or "").strip()
+def _novel_text_search(query: str, is_regex: bool = False, vol: str | None = None,
+                       limit: int = 60, stop_after_first: bool = False):
+    """按卷、章自然顺序扫描原著；既供阅读器搜索，也供问答作可核验的精确证据。"""
+    q = (query or "").strip()
     if not q:
-        return {"results": [], "total_matches": 0, "chapters_matched": 0}
-
-    pattern = None
-    if req.is_regex:
-        try:
-            pattern = re.compile(q, re.IGNORECASE)
-        except re.error as e:
-            return JSONResponse({"error": f"正则表达式语法错误：{e}"}, status_code=400)
+        return {"results": [], "total_matches": 0, "chapters_matched": 0, "query": q, "is_regex": is_regex}
+    try:
+        pattern = re.compile(q if is_regex else re.escape(q), re.IGNORECASE)
+    except re.error as e:
+        raise ValueError(f"正则表达式语法错误：{e}") from e
+    if is_regex and pattern.search(""):
+        raise ValueError("正则表达式不能匹配空文本，请至少匹配一个字符")
 
     root = library.NOVEL_ROOT.resolve()
     if not root.is_dir():
-        return {"results": [], "total_matches": 0, "chapters_matched": 0}
+        return {"results": [], "total_matches": 0, "chapters_matched": 0, "query": q, "is_regex": is_regex}
 
-    results = []
-    total_matches = 0
-
+    results, total_matches, truncated = [], 0, False
+    limit = max(1, min(int(limit or 60), 200))
     for vdir in sorted(os.listdir(root), key=library._natural_key):
-        if req.vol and vdir != req.vol:
+        if vol and vdir != vol:
             continue
         vp = root / vdir
         if not vp.is_dir():
@@ -109,68 +109,47 @@ def search_novel_text(req: NovelSearchReq):
             fp = vp / fn
             try:
                 content = fp.read_text(encoding="utf-8")
-            except Exception:
+            except OSError:
                 continue
-
-            ch_num = 0
-            m_fn = re.match(r"第(\d+)章\.txt", fn)
-            if m_fn:
-                ch_num = int(m_fn.group(1))
-
-            matches_in_ch = []
+            found = list(pattern.finditer(content))
+            if not found:
+                continue
+            ch_match = re.match(r"第(\d+)章\.txt", fn)
+            chapter = int(ch_match.group(1)) if ch_match else 0
             lines = content.splitlines()
-            title = lines[0].strip() if lines else fn
-
-            for line_idx, line in enumerate(lines):
-                line_str = line.strip()
-                if not line_str:
-                    continue
-                if pattern:
-                    found = list(pattern.finditer(line_str))
-                    if found:
-                        for match in found[:3]:
-                            start = max(0, match.start() - 32)
-                            end = min(len(line_str), match.end() + 32)
-                            snippet = line_str[start:end]
-                            matches_in_ch.append({
-                                "line": line_idx + 1,
-                                "snippet": snippet,
-                                "match": match.group(0),
-                            })
-                            total_matches += 1
-                else:
-                    pos = line_str.find(q)
-                    if pos != -1:
-                        start = max(0, pos - 32)
-                        end = min(len(line_str), pos + len(q) + 32)
-                        snippet = line_str[start:end]
-                        matches_in_ch.append({
-                            "line": line_idx + 1,
-                            "snippet": snippet,
-                            "match": q,
-                        })
-                        total_matches += 1
-
-            if matches_in_ch:
-                results.append({
-                    "vol": vdir,
-                    "chapter": ch_num,
-                    "title": title,
-                    "count": len(matches_in_ch),
-                    "snippets": matches_in_ch[:3],
+            snippets = []
+            for match in found[:3]:
+                start, end = max(0, match.start() - 44), min(len(content), match.end() + 72)
+                snippets.append({
+                    "line": content.count("\n", 0, match.start()) + 1,
+                    "snippet": " ".join(content[start:end].split()),
+                    "match": match.group(0),
                 })
-                if len(results) >= req.limit:
-                    break
-        if len(results) >= req.limit:
+            results.append({
+                "vol": vdir, "chapter": chapter,
+                "title": library._first_title(lines) if lines else fn,
+                "count": len(found), "snippets": snippets,
+            })
+            total_matches += len(found)
+            if stop_after_first:
+                return {"results": results, "total_matches": total_matches, "chapters_matched": 1,
+                        "query": q, "is_regex": is_regex, "truncated": False}
+            if len(results) >= limit:
+                truncated = True
+                break
+        if truncated:
             break
+    return {"results": results, "total_matches": total_matches, "chapters_matched": len(results),
+            "query": q, "is_regex": is_regex, "truncated": truncated}
 
-    return {
-        "results": results,
-        "total_matches": total_matches,
-        "chapters_matched": len(results),
-        "query": q,
-        "is_regex": req.is_regex,
-    }
+
+@app.post("/api/novel/search")
+def search_novel_text(req: NovelSearchReq):
+    """原著全文检索：支持文字、跨行片段和正则表达式。"""
+    try:
+        return _novel_text_search(req.query, req.is_regex, req.vol, req.limit)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
 
 
 class LocateReq(BaseModel):
@@ -310,6 +289,58 @@ def _supplement_irrelevant(merged):
         return True
     return not bool(re.search(r"\[\d{1,2}\]", merged))
 
+def _first_occurrence_query(question: str):
+    """识别“某段文字/人物在原文第一次出现于第几章”这类可由全文扫描确定的问题。"""
+    q = (question or "").strip()
+    has_first = bool(re.search(r"(?:第一次|首次|最早).{0,14}(?:出现|提及|提到)|(?:出现|提及|提到).{0,14}(?:第一次|首次|最早)", q))
+    has_location = bool(re.search(r"(?:第几章|哪一章|第.?章|在哪里|何处)", q))
+    if not (has_first and has_location):
+        return None
+    # 优先采用引号中的原文片段，避免把整句提问误当作检索词。
+    quoted = re.search(r"[“\"「]([^”\"」]{2,120})[”\"」]", q)
+    if quoted:
+        return quoted.group(1).strip()
+    # 无引号时兼容“方源第一次出现在哪一章”这类实体定位问题。
+    candidate = re.sub(r"^(?:请问|请|帮我|帮忙|查一下|查下|搜索一下|搜索)", "", q)
+    candidate = re.sub(r"(?:在)?原文(?:中|里)?(?:最早|第一次|首次).*$", "", candidate)
+    candidate = re.sub(r"(?:最早|第一次|首次).*$", "", candidate)
+    candidate = re.sub(r"(?:在)?原文(?:中|里)?(?:出现|提及|提到).*$", "", candidate)
+    candidate = re.sub(r"(?:出现|提及|提到).*$", "", candidate)
+    candidate = candidate.strip(" ：:，,。？?！! ")
+    return candidate if 1 < len(candidate) <= 60 else None
+
+
+def _first_occurrence_response(query: str, is_regex: bool = False):
+    """返回可复核的全文首章命中；不让向量排序或模型猜测影响“第一次”。"""
+    try:
+        found = _novel_text_search(query, is_regex=is_regex, limit=1, stop_after_first=True)
+    except ValueError as e:
+        return {"answer": f"原文正则表达式有误：{e}", "sources": [],
+                "exact_lookup": {"query": query, "found": False, "error": str(e)}}
+    if not found["results"]:
+        return {
+            "answer": f"我已按卷、章顺序对原著正文做精确全文检索，未找到“{query}”。\n\n"
+                      "这表示当前本地原文库中没有该连续文本；可尝试缩短片段、检查异体字或改用阅读页的正则搜索。",
+            "sources": [],
+            "exact_lookup": {"query": query, "found": False},
+        }
+    item = found["results"][0]
+    snip = item["snippets"][0] if item.get("snippets") else {}
+    line = snip.get("line")
+    line_note = f"（原始文本第 {line} 行）" if line else ""
+    answer = (f"“{query}”在本地《蛊真人》原著正文中**第一次出现**于：\n\n"
+              f"**{item['vol']} · 第 {item['chapter']} 章 · {item['title']}** {line_note}\n\n"
+              f"> {snip.get('snippet', '')}\n\n"
+              "此结果由原著全文按卷、章顺序精确扫描得出，不依赖 RAG 相似度排序。")
+    source = {
+        "type": "novel", "label": f"{item['vol']}·第{item['chapter']}章·{item['title']}（全文首次命中）",
+        "chapter": item["chapter"], "vol": item["vol"], "title": item["title"],
+        "excerpt": snip.get("snippet", ""),
+    }
+    return {"answer": answer, "sources": [source],
+            "exact_lookup": {"query": query, "found": True, "vol": item["vol"], "chapter": item["chapter"], "line": line}}
+
+
 
 @app.post("/api/ask")
 def ask(req: AskReq):
@@ -318,6 +349,18 @@ def ask(req: AskReq):
         return JSONResponse({"error": "问题不能为空"}, status_code=400)
     if retriever is None:
         return JSONResponse({"error": "检索库未加载"}, status_code=503)
+    # 可被精确全文扫描判定的“首次出现”问题优先走确定性路径：RAG 只负责语义问答，不能证明全书首次。
+    first_query = q if req.first_occurrence else _first_occurrence_query(q)
+    if first_query:
+        located = _first_occurrence_response(first_query, is_regex=req.original_regex)
+        if located is not None:
+            return {
+                **located,
+                "cost_rmb": 0.0,
+                "mock": False,
+                "web": False,
+                "wiki_cites": _wiki_cites_in(q),
+            }
     # 多轮追问时，结合上一轮用户提问增强短句/代词检索（如上一问是诗句，下一问“这句呢”或“在哪一章”）
     search_q = q
     if req.history and len(q) <= 15:

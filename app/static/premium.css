@@ -141,6 +141,12 @@ footer.chat-bar{
 }
 #q{ transition:border-color .16s var(--ease), box-shadow .16s var(--ease); }
 #q:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(176,141,95,.14); }
+.exact-ask-toggle{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; white-space:nowrap;
+  font-size:12px; color:var(--muted); cursor:pointer; user-select:none;
+}
+.exact-ask-toggle input{ width:13px; height:13px; margin:0; accent-color:var(--accent); }
+.exact-ask-toggle:has(input:checked){ color:var(--accent); font-weight:700; }
 
 /* ---------- 阅读 ---------- */
 .rtab.active{ background:var(--ink-deep); box-shadow:0 1px 3px rgba(28,28,26,.25); }

@@ -248,7 +248,14 @@ async function ask(){
   var d = addMsg('思考中…', 'bot');
   try {
     var r = await fetch('/api/ask', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({question: question, scope: $('scope').value, history: HISTORY.slice(0, -1), web_fallback: localStorage.getItem('gzr.webFallback') !== '0'})});
+      body: JSON.stringify({
+        question: question,
+        scope: $('scope').value,
+        history: HISTORY.slice(0, -1),
+        web_fallback: localStorage.getItem('gzr.webFallback') !== '0',
+        first_occurrence: !!($('first-occurrence') && $('first-occurrence').checked),
+        original_regex: !!($('first-occurrence-regex') && $('first-occurrence-regex').checked)
+      })});
     var j = await r.json();
     if (j.error){ d.textContent = '出错了：' + j.error; return; }
     var body = mdRender(j.answer);

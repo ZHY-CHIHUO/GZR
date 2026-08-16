@@ -64,6 +64,8 @@
             <option value="novel">仅正文</option>
           </select>
           <input id="q" placeholder="输入问题，回车发送（支持追问上下文）" autocomplete="off">
+          <label class="exact-ask-toggle" title="按原著卷章顺序全文扫描，直接给出首次匹配章节；不走 RAG 猜测。"><input type="checkbox" id="first-occurrence"> 首次出现</label>
+          <label class="exact-ask-toggle exact-ask-regex" title="仅在“首次出现”勾选后生效，输入将按正则表达式匹配。"><input type="checkbox" id="first-occurrence-regex"> 正则</label>
           <button id="send">发送</button>
         </footer>
       </div>
@@ -360,7 +362,7 @@
 
 <div id="toast"></div>
 
-<script src="/static/app.js?v=15"></script>
+<script src="/static/app.js?v=16"></script>
 <script src="/static/wiki-browser.js?v=6"></script>
 </body>
 </html>
