@@ -348,6 +348,53 @@ def _supplement_irrelevant(merged):
         return True
     return not bool(re.search(r"\[\d{1,2}\]", merged))
 
+def _literal_text_query(question: str):
+    """判断输入是否像一段待考据的连续文本，而不是常规语义提问。"""
+    q = (question or "").strip()
+    if not (4 <= len(q) <= 80):
+        return None
+    if re.search(r"[？?]|(?:谁|什么|为何|为什么|怎么|怎样|如何|多少|第几章|哪一章|哪里|在哪|是否)", q):
+        return None
+    # 纯短语/引文（可含逗号、句号）；避免把带长解释的自然语言问题做全书逐字扫描。
+    return q if not re.search(r"[：:；;]", q) else None
+
+
+def _exact_novel_evidence(query: str):
+    """为连续文本提供确定性原著证据；唯一命中可直接定章，多命中交给 RAG 结合首处证据解释。"""
+    try:
+        found = _novel_text_search(query, limit=200)
+    except ValueError:
+        return None
+    if not found.get("results"):
+        return None
+    evidence = []
+    for item in found["results"][:3]:
+        snip = (item.get("snippets") or [{}])[0]
+        evidence.append({
+            "type": "novel", "vol": item["vol"], "chapter": item["chapter"], "title": item["title"],
+            "text": snip.get("snippet", ""), "_exact_text": True,
+            "_exact_line": snip.get("line"),
+        })
+    return {"found": found, "evidence": evidence}
+
+
+def _unique_exact_novel_response(query: str, evidence):
+    """连续文本全书只命中一次时，直接返回唯一可复核章节而不是让模型猜。"""
+    item = evidence["found"]["results"][0]
+    snip = (item.get("snippets") or [{}])[0]
+    line = snip.get("line")
+    line_note = f"（原始文本第 {line} 行）" if line else ""
+    answer = (f"“{query}”在本地《蛊真人》原著正文中只精确命中 **1 处**：\n\n"
+              f"**{item['vol']} · 第 {item['chapter']} 章 · {item['title']}** {line_note}\n\n"
+              f"> {snip.get('snippet', '')}\n\n"
+              "结果由原著全文精确扫描得出，不依赖 RAG 相似度排序。")
+    source = format_source(evidence["evidence"][0])
+    source["label"] += "（全文唯一命中）"
+    return {"answer": answer, "sources": [source],
+            "exact_lookup": {"query": query, "found": True, "unique": True,
+                             "total_matches": 1, "vol": item["vol"], "chapter": item["chapter"], "line": line}}
+
+
 def _first_occurrence_query(question: str):
     """识别“某段文字/人物在原文第一次出现于第几章”这类可由全文扫描确定的问题。"""
     q = (question or "").strip()
@@ -433,18 +480,34 @@ def ask(req: AskReq):
         if last_user and last_user != q:
             search_q = (last_user[:30] + " " + q).strip()
 
-    # 对资料合集中的二创诗词做字面证据路由：短句必须先说明“收录但非原著”，不能被向量阈值漏掉后联网猜测。
+    # 连续文本先走全文考据：二创资料先定性；原著唯一命中直接给出章节；多处命中把最早几处原文证据交给 RAG。
     collection = _collection_poetry_response(q)
     if collection:
         return {**collection, "cost_rmb": 0.0, "mock": False, "web": False}
+    literal = _literal_text_query(q)
+    exact_novel = _exact_novel_evidence(literal) if literal else None
+    if exact_novel and exact_novel["found"].get("total_matches") == 1:
+        unique = _unique_exact_novel_response(literal, exact_novel)
+        return {**unique, "cost_rmb": 0.0, "mock": False, "web": False,
+                "wiki_cites": _wiki_cites_in(q)}
     # 一次检索（普通 + 追问增强 + 词条名强制召回 + 词条名原文补充）
     hits = _force_wiki_hits(q, retriever.search(search_q, scope=req.scope))
+    if exact_novel:
+        # 多次命中时，最早的实际原文排在 RAG 证据前面，模型不能再说“未收录”。
+        seen = {(h.get("vol"), h.get("chapter")) for h in hits}
+        hits = [h for h in exact_novel["evidence"] if (h.get("vol"), h.get("chapter")) not in seen] + hits
     exact_wiki = _exact_wiki_hits(q)
     for hit in exact_wiki:
         if not any(h.get("type") == "wiki" and h.get("name") == hit.get("name") and h.get("sub") == hit.get("sub") for h in hits):
             hits.insert(0, hit)
     hits = hits + _retry_extra(q, hits, req.scope)
     system, user = build_prompt(q, hits, config.EXCERPT_CHARS)
+    if exact_novel:
+        first = exact_novel["found"]["results"][0]
+        count = exact_novel["found"]["total_matches"]
+        user += (f"\n\n【全文精确核验】用户输入的连续文本在原著中已命中 {count} 处；"
+                 f"按卷章顺序的首处是 {first['vol']}·第{first['chapter']}章《{first['title']}》。"
+                 "回答必须承认该原文命中并优先说明首处；不要说资料库未收录，也不要联网搜索。")
     # 联网能力并入首次调用：资料库能答就答，答不了让模型直接联网（省一次调用）
     system_w = system + (
         "你有联网搜索工具 web_search：当【参考资料】确实没有相关内容、无法回答时，"
