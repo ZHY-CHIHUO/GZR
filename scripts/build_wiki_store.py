@@ -32,10 +32,20 @@ def build_for(dirname):
     model = info["model"]
     wiki = json.load(open(BASE / "data_jina2" / "wiki.json", encoding="utf-8"))
     docs = []
+
+    def walk(node, cat):
+        if not isinstance(node, dict):
+            return
+        if "name" in node:
+            yield node
+        else:
+            for _k, sub in node.items():
+                yield from walk(sub, cat)
+
     for cat, items in wiki.items():
         if cat == "_deleted":
             continue
-        for e in items:
+        for e in walk(items, cat):
             name = (e.get("name") or "").strip()
             if not name:
                 continue

@@ -19,9 +19,18 @@ def main():
     wiki = json.load(open(str(BASE / "data_jina2" / "wiki.json"), encoding="utf-8"))
     random.seed(20260815)
 
+    def walk(node):
+        if not isinstance(node, dict):
+            return
+        if "name" in node:
+            yield node
+        else:
+            for _k, sub in node.items():
+                yield from walk(sub)
+
     quiz = []
-    gu = wiki.get("蛊虫", [])
-    ppl = wiki.get("人物", [])
+    gu = list(walk(wiki.get("蛊虫", {})))
+    ppl = list(walk(wiki.get("人物", {})))
 
     def excerpt(d, n):
         t = re.sub(r"\s+", " ", d).strip()
