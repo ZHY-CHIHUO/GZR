@@ -45,7 +45,8 @@ def build_for(dirname):
             if sub and sub != "其他":
                 text += "（" + sub + "）"
             docs.append({"type": "wiki", "name": name, "cat": cat, "sub": sub,
-                         "section": e.get("section") or "", "text": text})
+                         "section": e.get("section") or "", "source_path": e.get("source_path") or "",
+                         "text": text})
     out = d / "wiki"
     out.mkdir(exist_ok=True)
     arr = embed([x["text"] for x in docs], model, BASE / "model_cache")
