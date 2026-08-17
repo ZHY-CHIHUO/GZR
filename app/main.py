@@ -243,9 +243,16 @@ def _is_active_wiki_hit(hit):
         return True
     try:
         _load_content()
-        name, cat, sub = hit.get("name"), hit.get("cat"), hit.get("sub", "")
-        return any(e.get("name") == name and (not sub or e.get("sub", "") == sub)
-                   for _c, _g, e in _iter_wiki_entries(_wiki or {}) if _c == cat)
+        name, cat, sub = hit.get("name"), hit.get("cat"), hit.get("sub", "") or ""
+        hit_path = hit.get("path")
+        for current_cat, group_path, entry in _iter_wiki_paths(_wiki or {}):
+            if current_cat != cat or entry.get("name") != name:
+                continue
+            if hit_path is not None:
+                return list(hit_path) == group_path
+            if not sub or "/".join(group_path) == sub or (group_path and group_path[-1] == sub):
+                return True
+        return False
     except Exception:
         return False
 
@@ -669,35 +676,56 @@ def test_settings(req: TestReq):
 # ---------- 百科与游戏 ----------
 
 
+def _is_wiki_leaf(v):
+    """词条节点：值为 dict 且带介绍字段（key 即词条名）。"""
+    return isinstance(v, dict) and any(k in v for k in ("intro", "desc", "sections", "aliases"))
+
+
 def _iter_wiki_entries(data):
-    """递归遍历树形百科：yield (cat, group, entry)。data 为 _wiki（树）。"""
+    """兼容旧调用：递归遍历并 yield (cat, slash_group_path, entry)。"""
+    for cat, group_path, entry in _iter_wiki_paths(data):
+        yield cat, "/".join(group_path), entry
+
+
+def _walk_wiki_nodes(cat, node, group_path):
+    """遍历一个分类下任意深度的分组树。"""
+    if not isinstance(node, dict):
+        return
+    for name, value in node.items():
+        if not isinstance(value, dict):
+            continue
+        has_children = any(isinstance(child, dict) for child in value.values())
+        if has_children:
+            yield from _walk_wiki_nodes(cat, value, group_path + [str(name)])
+        if _is_wiki_leaf(value):
+            yield cat, group_path, {"name": name, **value}
+
+
+def _iter_wiki_paths(data):
+    """递归遍历百科，yield (category, group_path, entry)。"""
     if not isinstance(data, dict):
         return
     for cat, node in data.items():
         if not isinstance(node, dict) or cat == "_deleted":
             continue
-        if "name" in node:
-            yield cat, "", node
-        else:
-            for group, sub in node.items():
-                if not isinstance(sub, dict):
-                    continue
-                if "name" in sub:
-                    yield cat, group, sub
-                else:
-                    for _n2, e2 in sub.items():
-                        if isinstance(e2, dict) and "name" in e2:
-                            yield cat, group, e2
+        yield from _walk_wiki_nodes(cat, node, [])
 
 
 def _flatten_wiki_tree(data):
-    """树 -> 扁平分类数组（兼容旧前端/旧逻辑）；entry 的 sub 取父分组名。"""
+    """树 -> 兼容旧前端的分类数组，并从实际路径派生元数据。"""
     flat = {}
-    for cat, group, e in _iter_wiki_entries(data):
-        e = dict(e)
-        if group:
-            e.setdefault("sub", group)
-        flat.setdefault(cat, []).append(e)
+    for cat, group_path, entry in _iter_wiki_paths(data):
+        entry = dict(entry)
+        entry["path"] = list(group_path)
+        if group_path:
+            entry.setdefault("sub", group_path[-1])
+            entry["tier"] = group_path[-1]
+            entry["source_path"] = " / ".join([cat] + group_path)
+        else:
+            entry.setdefault("sub", "其他")
+            entry["tier"] = ""
+            entry["source_path"] = cat
+        flat.setdefault(cat, []).append(entry)
     return flat
 
 _wiki = None
@@ -783,194 +811,241 @@ def wiki_all():
     _load_content()
     flat = _flatten_wiki_tree(_wiki or {})
     tree = {k: v for k, v in (_wiki or {}).items() if k != "_deleted"}
-    stats = {k: len(v) for k, v in flat.items() if k != "_deleted"}
+    stats = {k: len(v) for k, v in flat.items()}
+    groups = {}
+    for cat, group_path, _entry in _iter_wiki_paths(_wiki or {}):
+        if group_path:
+            key = "/".join(group_path)
+            bucket = groups.setdefault(cat, {})
+            bucket[key] = bucket.get(key, 0) + 1
     return {
         "categories": {k: v for k, v in flat.items() if k not in ("其他", "_deleted")},
         "other": flat.get("其他", []),
         "tree": tree,
         "stats": stats,
+        "groups": groups,
     }
 
 
+@app.get("/api/wiki/search")
+def wiki_search(q: str = "", cat: str = "", group: str = "", limit: int = 300):
+    """按名称、别名和正文搜索百科树，返回带完整路径的词条。"""
+    query = q.strip()
+    if len(query) < 2:
+        return {"items": [], "total": 0}
+    _load_content()
+    group_path = [p for p in group.split("/") if p]
+    matches = []
+    for current_cat, path_parts, raw_entry in _iter_wiki_paths(_wiki or {}):
+        if cat and current_cat != cat:
+            continue
+        if group_path and path_parts != group_path:
+            continue
+        entry = dict(raw_entry)
+        entry["path"] = list(path_parts)
+        entry["sub"] = path_parts[-1] if path_parts else "其他"
+        entry["tier"] = path_parts[-1] if path_parts else ""
+        entry["source_path"] = " / ".join([current_cat] + path_parts)
+        name = str(entry.get("name") or "")
+        aliases = [str(a) for a in (entry.get("aliases") or [])]
+        alias_exact = query in aliases
+        if name == query:
+            score = 0
+        elif alias_exact:
+            score = 1
+        elif query in name:
+            score = 2
+        elif any(query in alias for alias in aliases):
+            score = 3
+        else:
+            body = " ".join([
+                str(entry.get("intro") or ""), str(entry.get("desc") or ""),
+                " ".join(f"{s.get('title', '')} {s.get('text', '')}" for s in (entry.get("sections") or [])),
+            ])
+            if query not in body:
+                continue
+            score = 4
+        matches.append((score, current_cat, path_parts, entry))
+    matches.sort(key=lambda item: (item[0], item[1], item[2], item[3]["name"]))
+    cap = min(max(limit, 1), 500)
+    items = [{"cat": current_cat, **entry} for _score, current_cat, _path, entry in matches[:cap]]
+    return {"items": items, "total": len(matches)}
+
+
 class WikiEntryReq(BaseModel):
-    cat: str | None = None          # 新分类（移动时）
-    name: str | None = None         # 新名称（改名时）
-    old_cat: str | None = None      # 原分类
-    old_name: str | None = None     # 原名称
+    cat: str | None = None
+    name: str | None = None
+    old_cat: str | None = None
+    old_name: str | None = None
+    path: list[str] | None = None
+    old_path: list[str] | None = None
     sub: str | None = None
     section: str | None = None
     desc: str | None = None
     delete: bool = False
 
 
+def _wiki_node_at(data, cat, group_path, create=False):
+    if create and not isinstance(data.get(cat), dict):
+        data[cat] = {}
+    node = data.get(cat)
+    if not isinstance(node, dict):
+        return None
+    for part in group_path:
+        if create and not isinstance(node.get(part), dict):
+            node[part] = {}
+        node = node.get(part)
+        if not isinstance(node, dict):
+            return None
+    return node
+
+
+def _prune_wiki_groups(data, cat, group_path):
+    for depth in range(len(group_path), 0, -1):
+        parent = _wiki_node_at(data, cat, group_path[:depth - 1])
+        child_name = group_path[depth - 1]
+        if not isinstance(parent, dict) or not isinstance(parent.get(child_name), dict) or parent[child_name]:
+            break
+        parent.pop(child_name, None)
+    if isinstance(data.get(cat), dict) and not data[cat]:
+        data.pop(cat, None)
+
+
 @app.post("/api/wiki/update")
 def wiki_update(req: WikiEntryReq):
-    """编辑/删除百科条目（树存储），直接写回资料库 wiki.json。"""
+    """按分类与完整分组路径新增、编辑、移动或删除词条。"""
     _load_content()
-    path = config.DATA_DIR / "wiki.json"
-    if not path.is_file():
+    file_path = config.DATA_DIR / "wiki.json"
+    if not file_path.is_file():
         return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(file_path.read_text(encoding="utf-8"))
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
-    cat = req.old_cat or req.cat
-    name = req.old_name or req.name
 
-    def locate(cat_, name_):
-        node = data.get(cat_) if isinstance(data.get(cat_), dict) else {}
-        if not isinstance(node, dict):
-            return None, None, None
-        if "name" in node:
-            return node, None, node if node.get("name") == name_ else None
-        for group, sub in node.items():
-            if not isinstance(sub, dict):
-                continue
-            if "name" in sub:
-                if sub.get("name") == name_:
-                    return node, group, sub
-            elif name_ in sub:
-                return sub, group, sub[name_]
-        return None, None, None
+    old_cat, old_name = req.old_cat or req.cat, req.old_name or req.name
+    old_path = list(req.old_path or [])
+    parent = _wiki_node_at(data, old_cat, old_path) if old_cat and old_name else None
+    entry = parent.get(old_name) if isinstance(parent, dict) else None
+    if entry is not None and not _is_wiki_leaf(entry):
+        entry = None
 
-    parent, group, entry = locate(cat, name)
+    if entry is None and req.delete:
+        return JSONResponse({"ok": False, "error": "条目不存在"}, status_code=404)
     if entry is None:
-        if req.delete:
-            return JSONResponse({"ok": False, "error": f"条目不存在：{cat} / {name}"}, status_code=404)
         new_name = (req.name or "").strip()
-        new_cat = req.cat or cat
         if not new_name:
             return JSONResponse({"ok": False, "error": "名称不能为空"}, status_code=400)
-        entry = {"name": new_name, "desc": (req.desc or "").strip(),
-                 "section": (req.section or "").strip() or new_cat,
-                 "sub": (req.sub or "").strip()}
-        if new_cat not in data or not isinstance(data.get(new_cat), dict):
-            data[new_cat] = {}
-        sub = (req.sub or "其他").strip() or "其他"
-        if not isinstance(data[new_cat].get(sub), dict):
-            data[new_cat][sub] = {}
-        data[new_cat][sub][new_name] = entry
-        try:
-            path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-        except Exception as e:
-            return JSONResponse({"ok": False, "error": f"写入资料库失败：{e}"}, status_code=500)
-        _content_mtime["wiki"] = None
-        return {"ok": True, "cat": new_cat, "entry": entry, "created": True}
-    if req.delete:
+        target_cat = req.cat or old_cat
+        target_path = list(req.path if req.path is not None else ([req.sub] if req.sub else []))
+        target = _wiki_node_at(data, target_cat, target_path, create=True)
+        if new_name in target:
+            return JSONResponse({"ok": False, "error": "目标位置已有同名词条"}, status_code=409)
+        entry = {"desc": (req.desc or "").strip()}
+        if req.section:
+            entry["section"] = req.section.strip()
+        target[new_name] = entry
+        result = {"ok": True, "cat": target_cat, "path": target_path, "entry": {"name": new_name, **entry}, "created": True}
+    elif req.delete:
         import time as _time
-        trash = [t for t in data.get("_deleted", []) if not (t.get("cat") == cat and t.get("name") == name)]
-        trash.append(dict(entry, cat=cat, group=group, deletedAt=round(_time.time())))
+        trash = list(data.get("_deleted", []))
+        trash = [t for t in trash if not (t.get("cat") == old_cat and t.get("name") == old_name and t.get("path", []) == old_path)]
+        trash.append({**entry, "name": old_name, "cat": old_cat, "path": old_path, "deletedAt": round(_time.time())})
         data["_deleted"] = trash
-        if group is not None:
-            parent.pop(name, None)
-        else:
-            parent.pop(name, None)
-        node0 = data.get(cat)
-        if isinstance(node0, dict) and "name" not in node0:
-            for g, sub in list(node0.items()):
-                if isinstance(sub, dict) and "name" not in sub and not sub:
-                    node0.pop(g, None)
-            if not node0:
-                data.pop(cat, None)
+        parent.pop(old_name)
+        _prune_wiki_groups(data, old_cat, old_path)
+        result = {"ok": True, "deleted": 1}
     else:
-        new_cat = req.cat or cat
-        new_name = (req.name or name).strip()
-        if not new_name:
+        target_cat = req.cat or old_cat
+        target_name = (req.name or old_name).strip()
+        target_path = list(req.path if req.path is not None else (old_path if req.sub is None else ([req.sub] if req.sub else [])))
+        if not target_name:
             return JSONResponse({"ok": False, "error": "名称不能为空"}, status_code=400)
-        old_group = group or (entry.get("sub") or "其他")
-        ng = (req.sub or "其他").strip() or "其他"
-        if new_cat != cat or new_name != name or ng != old_group:
-            if group is not None:
-                parent.pop(name, None)
-            else:
-                parent.pop(name, None)
-            if new_cat not in data or not isinstance(data.get(new_cat), dict):
-                data[new_cat] = {}
-            if not isinstance(data[new_cat].get(ng), dict):
-                data[new_cat][ng] = {}
-            entry = dict(entry)
-            entry["name"] = new_name
-            entry["sub"] = ng
-            data[new_cat][ng][new_name] = entry
+        updated = dict(entry)
+        if req.section is not None:
+            updated["section"] = req.section.strip()
+        if req.desc is not None:
+            updated["desc"] = req.desc.strip()
+        if (target_cat, target_path, target_name) != (old_cat, old_path, old_name):
+            target = _wiki_node_at(data, target_cat, target_path, create=True)
+            if target_name in target:
+                return JSONResponse({"ok": False, "error": "目标位置已有同名词条"}, status_code=409)
+            parent.pop(old_name)
+            target[target_name] = updated
+            _prune_wiki_groups(data, old_cat, old_path)
         else:
-            if req.sub is not None:
-                entry["sub"] = req.sub.strip()
-            if req.section is not None:
-                entry["section"] = req.section.strip()
-            if req.desc is not None:
-                entry["desc"] = req.desc.strip()
+            parent[old_name] = updated
+        result = {"ok": True, "cat": target_cat, "path": target_path, "entry": {"name": target_name, **updated}}
     try:
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        file_path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"写入资料库失败：{e}"}, status_code=500)
     _content_mtime["wiki"] = None
-    if req.delete:
-        return {"ok": True, "deleted": 1}
-    return {"ok": True, "cat": req.cat or cat, "entry": entry}
+    return result
 
 
 class WikiTrashReq(BaseModel):
     cat: str
     name: str
+    path: list[str] | None = None
 
 
 @app.get("/api/wiki/trash")
 def wiki_trash_list():
-    """回收站：被删除的词条。"""
     _load_content()
     return {"items": list(_wiki.get("_deleted", []))}
 
 
+def _take_trashed_entry(data, req):
+    for index, item in enumerate(data.get("_deleted", [])):
+        if item.get("cat") == req.cat and item.get("name") == req.name and (req.path is None or item.get("path", []) == req.path):
+            return index, item
+    return None, None
+
+
 @app.post("/api/wiki/restore")
 def wiki_restore(req: WikiTrashReq):
-    """把回收站里的词条恢复到原分类。"""
     _load_content()
-    path = config.DATA_DIR / "wiki.json"
-    if not path.is_file():
-        return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
+    file_path = config.DATA_DIR / "wiki.json"
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(file_path.read_text(encoding="utf-8"))
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
-    trash = data.get("_deleted", [])
-    idx = next((i for i, t in enumerate(trash) if t.get("cat") == req.cat and t.get("name") == req.name), None)
-    if idx is None:
+    index, item = _take_trashed_entry(data, req)
+    if item is None:
         return JSONResponse({"ok": False, "error": "回收站中找不到该词条"}, status_code=404)
-    entry = dict(trash.pop(idx))
-    entry.pop("cat", None)
-    entry.pop("deletedAt", None)
-    target = [e for e in data.get(req.cat, []) if e.get("name") != entry.get("name")]
-    data[req.cat] = target
-    target.append(entry)
-    if not trash:
-        data.pop("_deleted", None)
-    try:
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": f"写入资料库失败：{e}"}, status_code=500)
+    original_cat = item.get("cat")
+    if not isinstance(original_cat, str) or not original_cat:
+        return JSONResponse({"ok": False, "error": "回收站词条缺少原分类"}, status_code=500)
+    target_path = list(item.get("path", []))
+    target = _wiki_node_at(data, original_cat, target_path, create=True)
+    if item["name"] in target:
+        return JSONResponse({"ok": False, "error": "原位置已有同名词条"}, status_code=409)
+    entry = {k: v for k, v in item.items() if k not in ("name", "cat", "path", "deletedAt")}
+    target[item["name"]] = entry
+    data["_deleted"].pop(index)
+    if not data["_deleted"]:
+        data.pop("_deleted")
+    file_path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     _content_mtime["wiki"] = None
-    return {"ok": True, "entry": entry}
+    return {"ok": True, "cat": original_cat, "path": target_path, "entry": {"name": item["name"], **entry}}
 
 
 @app.post("/api/wiki/trash-purge")
 def wiki_trash_purge(req: WikiTrashReq):
-    """从回收站彻底删除（不可恢复）。"""
     _load_content()
-    path = config.DATA_DIR / "wiki.json"
-    if not path.is_file():
-        return JSONResponse({"ok": False, "error": "资料库文件不存在"}, status_code=404)
+    file_path = config.DATA_DIR / "wiki.json"
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(file_path.read_text(encoding="utf-8"))
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
-    trash = [t for t in data.get("_deleted", []) if not (t.get("cat") == req.cat and t.get("name") == req.name)]
-    data["_deleted"] = trash
-    if not trash:
-        data.pop("_deleted", None)
-    try:
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    except Exception as e:
-        return JSONResponse({"ok": False, "error": f"写入资料库失败：{e}"}, status_code=500)
+    index, item = _take_trashed_entry(data, req)
+    if item is None:
+        return JSONResponse({"ok": False, "error": "回收站中找不到该词条"}, status_code=404)
+    data["_deleted"].pop(index)
+    if not data["_deleted"]:
+        data.pop("_deleted")
+    file_path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     _content_mtime["wiki"] = None
     return {"ok": True, "purged": 1}
 

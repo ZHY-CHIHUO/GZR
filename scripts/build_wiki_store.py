@@ -33,24 +33,30 @@ def build_for(dirname):
     wiki = json.load(open(BASE / "data_jina2" / "wiki.json", encoding="utf-8"))
     docs = []
 
-    def walk(node, cat):
+    def is_leaf(v):
+        return isinstance(v, dict) and any(k in v for k in ("intro", "desc", "sections", "aliases"))
+
+    def walk(cat, node, path):
         if not isinstance(node, dict):
             return
-        if "name" in node:
-            yield node
-        else:
-            for _k, sub in node.items():
-                yield from walk(sub, cat)
+        for name, value in node.items():
+            if not isinstance(value, dict):
+                continue
+            if any(isinstance(child, dict) for child in value.values()):
+                yield from walk(cat, value, path + [name])
+            if is_leaf(value):
+                yield cat, path, name, value
 
     for cat, items in wiki.items():
         if cat == "_deleted":
             continue
-        for e in walk(items, cat):
-            name = (e.get("name") or "").strip()
+        for _cat, path_parts, name, e in walk(cat, items, []):
+            name = (name or "").strip()
             if not name:
                 continue
-            sub = e.get("sub") or ""
-            tier = e.get("tier") or ""
+            sub = path_parts[-1] if path_parts else "其他"
+            tier = path_parts[-1] if path_parts else ""
+            source_path = " / ".join([cat] + path_parts)
             # v2 结构化内容：intro（一级介绍）+ sections（二级介绍）优先；旧词条回退 desc
             parts = []
             if e.get("intro"):
@@ -72,9 +78,9 @@ def build_for(dirname):
                 text += "【" + tier + "】"
             elif sub and sub != "其他":
                 text += "（" + sub + "）"
-            docs.append({"type": "wiki", "name": name, "cat": cat, "sub": sub,
-                         "tier": tier, "aliases": aliases,
-                         "section": e.get("section") or "", "source_path": e.get("source_path") or "",
+            docs.append({"type": "wiki", "name": name, "cat": cat, "path": path_parts,
+                         "sub": sub, "tier": tier, "aliases": aliases,
+                         "section": e.get("section") or "", "source_path": source_path,
                          "text": text})
     out = d / "wiki"
     out.mkdir(exist_ok=True)
