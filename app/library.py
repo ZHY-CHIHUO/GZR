@@ -373,7 +373,6 @@ def lore_structured():
 
     toc, out = [], []
     idx = 0
-    seen = set()
     for pi, (t, s) in enumerate(merged):
         lv = None
         txt = t
@@ -385,12 +384,8 @@ def lore_structured():
         if lv:
             idx += 1
             anchor = f"sec{idx}"
-            # 同名标题在资料合集不同位置可能层级不同（如“古月方源”）；
-            # 目录保留后一次、即人工校对的后置专题层级，而不是首个旧条目。
-            if txt in seen:
-                toc = [x for x in toc if x.get("text") != txt]
-            else:
-                seen.add(txt)
+            # 同名标题（如“仙蛊屋”“古月方源”）可能在不同位置出现且层级不同，
+            # 全部保留各自位置，不能用标题名去重，否则会顶掉正确的独立一级目录。
             toc.append({"text": txt, "level": min(lv, 3), "anchor": anchor})
             out.append({"kind": "h2", "level": min(lv, 3), "text": txt, "anchor": anchor})
         else:
