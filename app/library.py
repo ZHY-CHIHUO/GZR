@@ -327,10 +327,13 @@ def lore_structured():
     _cache_file = _DD / "lore_structured_cache.json"
     _toc_path = _DD / "lore_toc.json"
     _toc_mtime = _toc_path.stat().st_mtime if _toc_path.is_file() else 0
-    if _cache_file.is_file() and _cache_file.stat().st_mtime >= _toc_mtime:
+    if _cache_file.is_file():
         try:
-            _lore_structured_cache = _json.loads(_cache_file.read_text(encoding="utf-8"))
-            return _lore_structured_cache
+            cached = _json.loads(_cache_file.read_text(encoding="utf-8"))
+            # 旧缓存没有目录版本标记，会让人工校对后的层级被错误复用；必须重建一次。
+            if cached.get("_toc_mtime") == _toc_mtime:
+                _lore_structured_cache = cached
+                return _lore_structured_cache
         except Exception:
             pass
 
@@ -382,13 +385,17 @@ def lore_structured():
         if lv:
             idx += 1
             anchor = f"sec{idx}"
-            if txt not in seen:
+            # 同名标题在资料合集不同位置可能层级不同（如“古月方源”）；
+            # 目录保留后一次、即人工校对的后置专题层级，而不是首个旧条目。
+            if txt in seen:
+                toc = [x for x in toc if x.get("text") != txt]
+            else:
                 seen.add(txt)
-                toc.append({"text": txt, "level": min(lv, 3), "anchor": anchor})
+            toc.append({"text": txt, "level": min(lv, 3), "anchor": anchor})
             out.append({"kind": "h2", "level": min(lv, 3), "text": txt, "anchor": anchor})
         else:
             out.append({"kind": "p", "text": txt})
-    _lore_structured_cache = {"title": "《蛊真人》资料合集", "toc": toc, "paras": out}
+    _lore_structured_cache = {"title": "《蛊真人》资料合集", "toc": toc, "paras": out, "_toc_mtime": _toc_mtime}
     try:
         _cache_file.write_text(_json.dumps(_lore_structured_cache, ensure_ascii=False), encoding="utf-8")
     except Exception:
