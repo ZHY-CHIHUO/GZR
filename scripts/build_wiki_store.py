@@ -37,14 +37,33 @@ def build_for(dirname):
             continue
         for e in items:
             name = (e.get("name") or "").strip()
-            desc = (e.get("desc") or "").strip()
-            if not name or not desc:
+            if not name:
                 continue
             sub = e.get("sub") or ""
-            text = name + "：" + desc
-            if sub and sub != "其他":
+            tier = e.get("tier") or ""
+            # v2 结构化内容：intro（一级介绍）+ sections（二级介绍）优先；旧词条回退 desc
+            parts = []
+            if e.get("intro"):
+                parts.append(str(e["intro"]).strip())
+            for sec in (e.get("sections") or []):
+                t = str(sec.get("text") or "").strip()
+                if t:
+                    parts.append(t)
+            if not parts:
+                desc = (e.get("desc") or "").strip()
+                if not desc:
+                    continue
+                parts.append(desc)
+            text = name + "：" + "\n".join(parts)
+            aliases = [str(x).strip() for x in (e.get("aliases") or []) if str(x).strip()]
+            if aliases:
+                text += "（别名：" + "、".join(aliases) + "）"
+            if tier and tier != "其他":
+                text += "【" + tier + "】"
+            elif sub and sub != "其他":
                 text += "（" + sub + "）"
             docs.append({"type": "wiki", "name": name, "cat": cat, "sub": sub,
+                         "tier": tier, "aliases": aliases,
                          "section": e.get("section") or "", "source_path": e.get("source_path") or "",
                          "text": text})
     out = d / "wiki"
