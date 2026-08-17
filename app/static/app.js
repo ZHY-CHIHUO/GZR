@@ -722,6 +722,298 @@ async function initWebFallback(){
   };
 }
 
+/* ---------- 百科索引 ---------- */
+var WIKI_INDEX_STATUS_TIMER = null, WIKI_INDEX_BUSY = false;
+function wikiIndexStatus(message, state){
+  var box = $('wiki-index-status');
+  if (!box) return;
+  box.textContent = message || '';
+  box.className = 'result' + (state ? ' ' + state : '');
+}
+function stopWikiIndexStatusPolling(){
+  if (WIKI_INDEX_STATUS_TIMER){ clearTimeout(WIKI_INDEX_STATUS_TIMER); WIKI_INDEX_STATUS_TIMER = null; }
+}
+function scheduleWikiIndexStatusPolling(){
+  stopWikiIndexStatusPolling();
+  WIKI_INDEX_STATUS_TIMER = setTimeout(refreshWikiIndexStatus, 2000);
+}
+function wikiIndexReadyText(index){
+  if (!index || !index.available) return '尚未建立百科索引。';
+  if (!index.valid) return '索引需要重建：' + (index.reason || '资料已变更');
+  return '当前索引可用：' + Number(index.entries || 0) + ' 条 / ' + Number(index.dimension || 0) + ' 维。';
+}
+async function refreshWikiIndexStatus(){
+  var button = $('wiki-index-build');
+  try {
+    var response = await fetch('/api/wiki-index/status');
+    var payload = await dataPackJson(response);
+    var job = payload.job || {}, index = payload.index || {};
+    var running = job.state === 'running';
+    WIKI_INDEX_BUSY = running;
+    if (button) button.disabled = running;
+    if (running){
+      wikiIndexStatus('正在重建全部百科词条的语义索引…页面可继续使用。');
+      scheduleWikiIndexStatusPolling();
+      return;
+    }
+    stopWikiIndexStatusPolling();
+    if (job.state === 'failed'){
+      wikiIndexStatus('索引重建失败：' + (job.error || '请查看服务日志'), 'err');
+      return;
+    }
+    if (job.state === 'completed'){
+      wikiIndexStatus('索引已重建：' + Number(index.entries || 0) + ' 条 / ' + Number(index.dimension || 0) + ' 维，耗时 ' + Number(job.durationSeconds || 0).toFixed(1) + ' 秒。', 'ok');
+      return;
+    }
+    wikiIndexStatus(wikiIndexReadyText(index), index.valid ? 'ok' : 'warn');
+  } catch(e){
+    if (button) button.disabled = false;
+    wikiIndexStatus('无法获取索引状态：' + e.message, 'err');
+  }
+}
+async function startWikiIndexBuild(){
+  if (WIKI_INDEX_BUSY) return;
+  if (!confirm('将重新生成全部百科词条的语义索引，预计需要数分钟。百科资料不会被修改。现在开始吗？')) return;
+  WIKI_INDEX_BUSY = true;
+  var button = $('wiki-index-build');
+  if (button) button.disabled = true;
+  wikiIndexStatus('正在启动百科索引重建…');
+  try {
+    var response = await fetch('/api/wiki-index/build', {method:'POST'});
+    var payload = await dataPackJson(response);
+    toast('百科索引开始重建');
+    if (payload.job && payload.job.state === 'running') scheduleWikiIndexStatusPolling();
+    else await refreshWikiIndexStatus();
+  } catch(e){
+    WIKI_INDEX_BUSY = false;
+    if (button) button.disabled = false;
+    wikiIndexStatus('无法启动索引重建：' + e.message, 'err');
+  }
+}
+
+/* ---------- 资料包 ---------- */
+var DATA_PACK_FILE = null, DATA_PACK_PREVIEW = null, DATA_PACK_BUSY = false;
+function dataPackStatus(message, state){
+  var box = $('data-pack-status');
+  if (!box) return;
+  box.textContent = message || '';
+  box.className = 'result' + (state ? ' ' + state : '');
+}
+function dataPackBytes(value){
+  var bytes = Number(value) || 0;
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+function dataPackDate(value){
+  if (!value) return '未知时间';
+  var date = new Date(value);
+  return isNaN(date.getTime()) ? String(value) : date.toLocaleString('zh-CN', {hour12:false});
+}
+async function dataPackJson(response){
+  var payload;
+  try { payload = await response.json(); }
+  catch(e){ throw new Error('服务器返回了无法识别的数据'); }
+  if (!response.ok || !payload || payload.ok === false){
+    throw new Error((payload && (payload.error || payload.detail)) || ('HTTP ' + response.status));
+  }
+  return payload;
+}
+function dataPackFilename(response, fallback){
+  var header = response.headers.get('Content-Disposition') || '';
+  var match = header.match(/filename="?([^";]+)"?/i);
+  return match && match[1] ? match[1] : fallback;
+}
+async function exportDataPack(kind){
+  if (DATA_PACK_BUSY) return;
+  DATA_PACK_BUSY = true;
+  dataPackStatus(kind === 'full' ? '正在打包完整离线资料…' : '正在打包资料…');
+  try {
+    var response = await fetch('/api/data-pack/export', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({kind:kind, custom_quiz:customQuiz()})
+    });
+    if (!response.ok){
+      var message = 'HTTP ' + response.status;
+      try { var errorPayload = await response.json(); message = errorPayload.error || message; } catch(e){}
+      throw new Error(message);
+    }
+    var blob = await response.blob();
+    var url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url;
+    link.download = dataPackFilename(response, 'gzr-' + kind + '-data.gzrpack');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 0);
+    dataPackStatus(kind === 'full'
+      ? '完整离线包已导出：' + dataPackBytes(blob.size) + '。仅支持覆盖导入，适合完整备份或迁移。'
+      : '资料包已导出：' + dataPackBytes(blob.size) + '。可在另一套兼容项目中先检查清单和冲突后导入。', 'ok');
+  } catch(e){
+    dataPackStatus('导出失败：' + e.message, 'err');
+    toast('资料包导出失败');
+  } finally { DATA_PACK_BUSY = false; }
+}
+function chooseDataPackImport(){
+  if (DATA_PACK_BUSY) return;
+  var input = $('data-pack-file');
+  if (!input) return;
+  DATA_PACK_FILE = null;
+  DATA_PACK_PREVIEW = null;
+  input.value = '';
+  input.click();
+}
+function dataPackStatsHtml(title, preview){
+  preview = preview || {};
+  return '<section class="data-pack-preview-section"><h3>'+esc(title)+'</h3><div class="data-pack-stats">'+
+    '<div><span>包内</span><b>'+Number(preview.incomingEntries || 0)+'</b></div>'+
+    '<div><span>本地</span><b>'+Number(preview.localEntries || 0)+'</b></div>'+
+    '<div><span>新增</span><b>'+Number(preview.newEntries || 0)+'</b></div>'+
+    '<div><span>相同</span><b>'+Number(preview.identicalEntries || 0)+'</b></div>'+
+    '<div class="'+(preview.conflicts ? 'has-conflict' : '')+'"><span>冲突</span><b>'+Number(preview.conflicts || 0)+'</b></div>'+
+    '</div></section>';
+}
+function dataPackWikiConflict(sample){
+  return [sample.cat].concat(sample.path || []).concat(sample.name || []).filter(Boolean).join(' / ');
+}
+function dataPackQuizConflict(sample){
+  var kind = sample.kind === 'riddle' ? '谜题' : '选择题';
+  return [kind, sample.type, sample.name].filter(Boolean).join(' / ');
+}
+function dataPackConflictsHtml(title, samples, formatter){
+  samples = Array.isArray(samples) ? samples : [];
+  if (!samples.length) return '';
+  return '<section class="data-pack-preview-section data-pack-conflicts"><h3>'+esc(title)+'</h3><ul>'+samples.map(function(sample){ return '<li>'+esc(formatter(sample))+'</li>'; }).join('')+'</ul></section>';
+}
+function renderDataPackPreview(file, preview){
+  var box = $('data-pack-preview-body');
+  if (!box) return;
+  var files = Array.isArray(preview.files) ? preview.files : [];
+  var kind = preview.kind === 'full' ? '完整离线包' : '资料包';
+  var index = preview.wikiIndex || {};
+  var indexText = !index.included ? '未附带百科向量索引' : (index.usable ? '附带索引，可直接启用（'+Number(index.entries || 0)+' 条 / '+Number(index.dimension || 0)+' 维）' : '索引不可直接使用：' + (index.reason || '校验未通过'));
+  var warning = preview.kind === 'full' ? '<p class="data-pack-warning">完整离线包只能覆盖导入，当前资料会先自动备份。</p>' : '';
+  box.innerHTML = '<div class="data-pack-preview-summary"><strong>'+esc(kind)+'</strong><span>'+esc(file.name)+' · '+dataPackBytes(file.size)+'</span><small>生成于 '+esc(dataPackDate(preview.createdAt))+'</small></div>'+warning+
+    '<section class="data-pack-preview-section"><h3>文件清单 <em>'+files.length+' 个</em></h3><ul class="data-pack-file-list">'+files.map(function(item){ return '<li><code>'+esc(item.path || '')+'</code><span>'+dataPackBytes(item.bytes)+'</span></li>'; }).join('')+'</ul></section>'+
+    dataPackStatsHtml('百科词条预览', preview.wiki)+
+    dataPackConflictsHtml('百科冲突样本（本地版本会在合并导入时保留）', (preview.wiki || {}).conflictSamples, dataPackWikiConflict)+
+    dataPackStatsHtml('默认题库预览', preview.quiz)+
+    dataPackConflictsHtml('题库冲突样本（本地版本会在合并导入时保留）', (preview.quiz || {}).conflictSamples, dataPackQuizConflict)+
+    '<section class="data-pack-preview-section data-pack-index"><h3>百科索引</h3><p>'+esc(indexText)+'</p><p>浏览器自定义题目：'+Number(preview.customQuizEntries || 0)+' 条</p></section>';
+
+  var mode = $('data-pack-import-mode');
+  var merge = mode.querySelector('option[value="merge"]');
+  if (preview.kind === 'full'){
+    mode.value = 'replace';
+    mode.disabled = true;
+    if (merge) merge.disabled = true;
+  } else {
+    mode.disabled = false;
+    mode.value = 'merge';
+    if (merge) merge.disabled = false;
+  }
+  $('data-pack-confirm').disabled = false;
+}
+async function inspectDataPackFile(file){
+  if (!file || DATA_PACK_BUSY) return;
+  DATA_PACK_FILE = file;
+  DATA_PACK_PREVIEW = null;
+  DATA_PACK_BUSY = true;
+  dataPackStatus('正在检查资料包并生成冲突预览…');
+  try {
+    var response = await fetch('/api/data-pack/inspect', {
+      method:'POST', headers:{'Content-Type':'application/zip'}, body:file
+    });
+    var payload = await dataPackJson(response);
+    DATA_PACK_PREVIEW = payload.preview;
+    renderDataPackPreview(file, payload.preview);
+    $('data-pack-preview-modal').classList.add('show');
+    dataPackStatus('资料包已检查，请确认导入方式。', 'ok');
+  } catch(e){
+    DATA_PACK_FILE = null;
+    dataPackStatus('资料包检查失败：' + e.message, 'err');
+    toast('资料包无法导入');
+  } finally { DATA_PACK_BUSY = false; }
+}
+async function mergeImportedCustomQuiz(items){
+  if (!Array.isArray(items) || !items.length) return {added:0, skipped:0};
+  var list = customQuiz(), seen = {}, added = 0, skipped = 0;
+  list.forEach(function(item){ seen[customQuizKey(item)] = true; });
+  DEFAULT_QUIZ_ALL = null;
+  await ensureDefaultQuizAll();
+  items.forEach(function(raw){
+    var normalized = normalizeCustomQuizItem(raw, '资料包导入题目');
+    if (!normalized.item){ skipped++; return; }
+    var item = normalized.item, key = customQuizKey(item);
+    var defaultDuplicate = item.kind === 'riddle' ? isDefaultDupRiddle(item.type, item.name) : isDefaultDupQuiz(item.q);
+    if (seen[key] || defaultDuplicate){ skipped++; return; }
+    seen[key] = true;
+    list.push(item);
+    added++;
+  });
+  if (added) saveCustomQuiz(list);
+  var count = $('cq-count');
+  if (count) count.textContent = list.length;
+  var quizModal = $('custom-quiz-modal');
+  if (quizModal && quizModal.classList.contains('show')) renderCustomQuizList();
+  return {added:added, skipped:skipped};
+}
+async function refreshImportedWiki(){
+  WIKI = null;
+  WIKI_TREE_ITEMS = null;
+  WIKI_ALIASES = {};
+  WIKI_VISIBLE = [];
+  WIKI_CURRENT = null;
+  var active = document.querySelector('.tab.active');
+  if (active && active.dataset.tab === 'wiki'){
+    await loadWiki(false);
+    if (WIKI) renderWikiHome();
+  }
+}
+async function importDataPack(){
+  if (DATA_PACK_BUSY || !DATA_PACK_FILE || !DATA_PACK_PREVIEW){ toast('请先选择并检查资料包'); return; }
+  var mode = DATA_PACK_PREVIEW.kind === 'full' ? 'replace' : $('data-pack-import-mode').value;
+  if (mode === 'replace' && !confirm('覆盖导入会先备份当前资料，并替换资料文件。确定继续吗？')) return;
+  DATA_PACK_BUSY = true;
+  $('data-pack-confirm').disabled = true;
+  dataPackStatus('正在导入资料包…');
+  try {
+    var response = await fetch('/api/data-pack/import', {
+      method:'POST',
+      headers:{'Content-Type':'application/zip', 'X-GZR-Import-Mode':mode},
+      body:DATA_PACK_FILE
+    });
+    var result = await dataPackJson(response);
+    var browserQuiz = await mergeImportedCustomQuiz(result.customQuiz);
+    await refreshImportedWiki();
+    var summary = result.summary || {};
+    var parts = ['导入完成：百科新增 '+Number(summary.wikiAdded || 0)+' 条，题库新增 '+Number(summary.quizAdded || 0)+' 条'];
+    if (browserQuiz.added || browserQuiz.skipped) parts.push('浏览器题库新增 '+browserQuiz.added+' 条，跳过 '+browserQuiz.skipped+' 条');
+    if (result.indexInstalled) parts.push('已启用随包百科索引');
+    if (result.needsWikiRebuild) parts.push('百科已变更，向量索引需在资料整理完成后重建');
+    if (result.backup) parts.push('已备份到 '+result.backup);
+    if (result.reloadError) parts.push('检索器刷新失败：'+result.reloadError);
+    dataPackStatus(parts.join('。'), result.reloadError ? 'warn' : 'ok');
+    closeModal('data-pack-preview-modal');
+    DATA_PACK_FILE = null;
+    DATA_PACK_PREVIEW = null;
+    $('data-pack-file').value = '';
+    toast('资料包已导入');
+  } catch(e){
+    dataPackStatus('导入失败：' + e.message, 'err');
+    toast('资料包导入失败');
+  } finally {
+    DATA_PACK_BUSY = false;
+    var button = $('data-pack-confirm');
+    if (button) button.disabled = false;
+  }
+}
+var DATA_PACK_INPUT = $('data-pack-file');
+if (DATA_PACK_INPUT){
+  DATA_PACK_INPUT.addEventListener('change', function(){ inspectDataPackFile(DATA_PACK_INPUT.files && DATA_PACK_INPUT.files[0]); });
+}
+
 /* ---------- 百科 ---------- */
 var WIKI = null, WIKI_CAT = '人物', WIKI_SUB = '', WIKI_SUBS = {};
 var WIKI_CURRENT = null, WIKI_VISIBLE = [];
@@ -981,105 +1273,83 @@ function isDefaultDupRiddle(type, name){
   var arr = DEFAULT_QUIZ_ALL.riddle_names[type] || [];
   return arr.indexOf(name) >= 0;
 }
-function addCustomQuestion(){
-  var kind = CQ_KIND;
-  var list = customQuiz();
-  if (kind === 'riddle'){
-    var name = ($('cq-rname').value || '').trim();
-    var rtype = $('cq-rtype').value;
-    var hints = ($('cq-rhints').value || '').split(/\n+/).map(function(s){ return s.trim(); }).filter(Boolean);
-    if (!name){ toast('请填写谜底名称'); return; }
-    if (hints.length < 5){ toast('提示不足 5 条（当前 '+hints.length+' 条），已剔除：请补足 5~10 条'); return; }
-    var dup = list.some(function(c){ return c.kind === 'riddle' && c.type === rtype && c.name === name; });
-    if (dup){ toast('题库中已有相同谜底，未添加'); return; }
-    ensureDefaultQuizAll().then(function(){
-      if (isDefaultDupRiddle(rtype, name)){ toast('该谜底与默认题库重复，未添加'); return; }
-      list.push({kind: 'riddle', type: rtype, name: name, hints: hints.slice(0, 10)});
-      saveCustomQuiz(list);
-      $('cq-rname').value = ''; $('cq-rhints').value = '';
-      $('cq-count').textContent = list.length;
-      renderCustomQuizList(); toast('已添加猜谜题，玩猜谜时会混入');
-    });
-    return;
+function cqText(value){ return value === undefined || value === null ? '' : String(value).trim(); }
+function cqHasDuplicates(values){ return values.some(function(value, index){ return values.indexOf(value) !== index; }); }
+function customQuizKey(item){ return item.kind === 'riddle' ? 'r:' + item.type + ':' + item.name : 'q:' + item.q; }
+function normalizeCustomQuizItem(raw, fallbackExplain){
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {error:'格式不符'};
+  var kind = raw.kind;
+  if (kind === undefined || kind === null || kind === '') kind = raw.q !== undefined ? 'quiz' : '';
+  if (kind === 'quiz'){
+    var quizTypes = {gu:1, person:1, type:1};
+    var q = cqText(raw.q);
+    var options = Array.isArray(raw.options) ? raw.options.map(cqText) : [];
+    if (!quizTypes[raw.type] || !q || options.length !== 4 || options.some(function(option){ return !option; })) return {error:'选择题字段不完整'};
+    if (cqHasDuplicates(options)) return {error:'选择题选项重复'};
+    if (typeof raw.answer !== 'number' || Math.floor(raw.answer) !== raw.answer || raw.answer < 0 || raw.answer > 3) return {error:'选择题答案必须为 0 至 3 的整数'};
+    return {item:{kind:'quiz', type:raw.type, q:q, options:options, answer:raw.answer, explain:cqText(raw.explain) || fallbackExplain || 'AI 导入题目'}};
   }
-  var type = $('cq-type').value;
-  var q = ($('cq-q').value || '').trim();
-  var opts = [0,1,2,3].map(function(i){ return ($('cq-o'+i).value || '').trim(); });
-  var ans = parseInt($('cq-ans').value, 10);
-  var exp = ($('cq-exp').value || '').trim();
-  if (!q || opts.some(function(o){ return !o; })){ toast('请填写题目和四个选项'); return; }
-  if (opts.some(function(o, i){ return opts.indexOf(o) !== i; })){ toast('四个选项不能重复'); return; }
-  var dup = list.some(function(c){ return c.kind !== 'riddle' && c.q === q; });
-  if (dup){ toast('题库中已有相同题目，未添加'); return; }
-  ensureDefaultQuizAll().then(function(){
-    if (isDefaultDupQuiz(q)){ toast('该题目与默认题库重复，未添加'); return; }
-    list.push({kind: 'quiz', type: type, q: q, options: opts, answer: ans, explain: exp || '自定义题目'});
-    saveCustomQuiz(list);
-    $('cq-q').value = ''; [0,1,2,3].forEach(function(i){ $('cq-o'+i).value = ''; }); $('cq-exp').value = '';
-    $('cq-count').textContent = list.length;
-    renderCustomQuizList(); toast('已添加，开始答题时会混入题库');
-  });
+  if (kind === 'riddle'){
+    var riddleTypes = {gu:1, person:1, item:1};
+    var name = cqText(raw.name);
+    var hints = Array.isArray(raw.hints) ? raw.hints.map(cqText).filter(Boolean) : [];
+    if (!riddleTypes[raw.type] || !name) return {error:'猜谜题字段不完整'};
+    if (hints.length < 5 || hints.length > 10) return {error:'猜谜题提示需为 5 至 10 条'};
+    if (cqHasDuplicates(hints)) return {error:'猜谜题提示重复'};
+    return {item:{kind:'riddle', type:raw.type, name:name, hints:hints}};
+  }
+  return {error:'题型不支持'};
 }
-function importCustomQuiz(){
+function setCqImportResult(message, state){ var box=$('cq-import-result'); if(!box)return; box.textContent=message; box.className='cq-import-result'+(state?' '+state:''); }
+async function addCustomQuestion(){
+  var raw;
+  if (CQ_KIND === 'riddle') raw = {kind:'riddle', type:$('cq-rtype').value, name:$('cq-rname').value, hints:($('cq-rhints').value || '').split(/\n+/)};
+  else raw = {kind:'quiz', type:$('cq-type').value, q:$('cq-q').value, options:[0,1,2,3].map(function(i){ return $('cq-o'+i).value; }), answer:parseInt($('cq-ans').value, 10), explain:$('cq-exp').value};
+  var normalized = normalizeCustomQuizItem(raw, '自定义题目');
+  if (!normalized.item){ toast(normalized.error + '，未添加'); return; }
+  var item = normalized.item, list = customQuiz();
+  if (list.some(function(existing){ return customQuizKey(existing) === customQuizKey(item); })){ toast('题库中已有相同题目，未添加'); return; }
+  await ensureDefaultQuizAll();
+  if ((item.kind === 'riddle' && isDefaultDupRiddle(item.type, item.name)) || (item.kind === 'quiz' && isDefaultDupQuiz(item.q))){ toast('与默认题库重复，未添加'); return; }
+  list.push(item);
+  saveCustomQuiz(list);
+  if (item.kind === 'riddle'){ $('cq-rname').value = ''; $('cq-rhints').value = ''; }
+  else { $('cq-q').value = ''; [0,1,2,3].forEach(function(i){ $('cq-o'+i).value = ''; }); $('cq-exp').value = ''; }
+  $('cq-count').textContent = list.length;
+  renderCustomQuizList();
+  toast(item.kind === 'riddle' ? '已添加猜谜题，玩猜谜时会混入' : '已添加，开始答题时会混入题库');
+}
+async function importCustomQuiz(){
   var raw = ($('cq-import').value || '').trim();
   if (!raw){ toast('请粘贴 JSON 内容'); return; }
   var arr;
-  try { arr = JSON.parse(raw); } catch(e){ toast('JSON 解析失败：'+e.message); return; }
-  if (!Array.isArray(arr) || !arr.length){ toast('需要是一个 JSON 数组'); return; }
-  var okQuiz = {gu:1, person:1, type:1}, okRiddle = {gu:1, person:1, item:1};
-  var added = 0, skippedBad = 0, skippedDup = 0, skippedDefault = 0, skippedShort = 0;
-  var list = customQuiz();
-  var seen = {};
-  list.forEach(function(it){
-    if (it.kind === 'riddle') seen['r:' + it.type + ':' + it.name] = 1;
-    else seen['q:' + it.q] = 1;
+  try { arr = JSON.parse(raw); } catch(e){ setCqImportResult('JSON 解析失败：'+e.message, 'error'); toast('JSON 解析失败'); return; }
+  if (!Array.isArray(arr) || !arr.length){ setCqImportResult('需要是一个非空 JSON 数组', 'error'); toast('需要是一个 JSON 数组'); return; }
+  var invalid = 0, duplicate = 0, defaultDuplicate = 0, candidates = [];
+  arr.forEach(function(rawItem){ var normalized = normalizeCustomQuizItem(rawItem, 'AI 导入题目'); if (!normalized.item){ invalid++; return; } candidates.push(normalized.item); });
+  var list = customQuiz(), seen = {};
+  list.forEach(function(item){ seen[customQuizKey(item)] = 1; });
+  var batchSeen = {}, unique = [];
+  candidates.forEach(function(item){ var key = customQuizKey(item); if (seen[key] || batchSeen[key]){ duplicate++; return; } batchSeen[key] = 1; unique.push(item); });
+  await ensureDefaultQuizAll();
+  var accepted = [];
+  unique.forEach(function(item){
+    var existsInDefault = item.kind === 'riddle' ? isDefaultDupRiddle(item.type, item.name) : isDefaultDupQuiz(item.q);
+    if (existsInDefault){ defaultDuplicate++; return; }
+    accepted.push(item);
   });
-  var batch = [];
-  arr.forEach(function(item){
-    if (!item || typeof item !== 'object'){ skippedBad++; return; }
-    if (item.kind === 'riddle'){
-      if (!item.name || !Array.isArray(item.hints) || !okRiddle[item.type]){ skippedBad++; return; }
-      if (item.hints.length < 5){ skippedShort++; return; }
-      batch.push({kind:'riddle', type:item.type, name:String(item.name).trim(), hints:item.hints.map(String).map(function(h){ return h.trim(); })});
-      return;
-    }
-    if (!item.q || !Array.isArray(item.options) || item.options.length !== 4 || typeof item.answer !== 'number' || item.answer < 0 || item.answer >= 4 || !okQuiz[item.type]){ skippedBad++; return; }
-    batch.push({kind:'quiz', type:item.type, q:String(item.q).trim(), options:item.options.map(String).map(function(o){ return o.trim(); }), answer:item.answer, explain:String(item.explain || 'AI 导入题目')});
-  });
-  // 批内去重 + 与自定义题库去重
-  var batchSeen = {};
-  var unique = [];
-  batch.forEach(function(it){
-    var key = it.kind === 'riddle' ? 'r:' + it.type + ':' + it.name : 'q:' + it.q;
-    if (seen[key] || batchSeen[key]){ skippedDup++; return; }
-    batchSeen[key] = 1;
-    unique.push(it);
-  });
-  // 异步与默认题库去重后入库
-  ensureDefaultQuizAll().then(function(d){
-    var final = [];
-    unique.forEach(function(it){
-      if (it.kind === 'riddle'){
-        if (isDefaultDupRiddle(it.type, it.name)){ skippedDefault++; return; }
-      } else {
-        if (isDefaultDupQuiz(it.q)){ skippedDefault++; return; }
-      }
-      final.push(it);
-      added++;
-    });
-    list = list.concat(final);
-    saveCustomQuiz(list);
-    $('cq-count').textContent = list.length;
-    $('cq-import').value = '';
-    renderCustomQuizList();
-    var msg = '导入成功 ' + added + ' 条';
-    if (skippedDup) msg += '，剔除重复 ' + skippedDup + ' 条';
-    if (skippedDefault) msg += '，与默认题库重复剔除 ' + skippedDefault + ' 条';
-    if (skippedShort) msg += '，提示不足5条剔除 ' + skippedShort + ' 条';
-    if (skippedBad) msg += '，剔除格式不符 ' + skippedBad + ' 条';
-    toast(msg);
-  });
+  if (accepted.length){ list = list.concat(accepted); saveCustomQuiz(list); $('cq-count').textContent = list.length; renderCustomQuizList(); }
+  var parts = ['已导入 '+accepted.length+' 条'];
+  if (invalid) parts.push('格式不符 '+invalid+' 条');
+  if (duplicate) parts.push('重复 '+duplicate+' 条');
+  if (defaultDuplicate) parts.push('默认题库重复 '+defaultDuplicate+' 条');
+  var message = parts.join('，');
+  setCqImportResult(message, accepted.length ? 'ok' : 'error');
+  if (!invalid && !duplicate && !defaultDuplicate) $('cq-import').value = '';
+  toast(message);
 }
+function openCustomQuizExample(){ $('custom-quiz-example-modal').classList.add('show'); }
+function useCustomQuizExample(){ $('cq-import').value = ($('cq-import-example').textContent || '').trim(); closeModal('custom-quiz-example-modal'); $('custom-quiz-modal').classList.add('show'); $('cq-import').focus(); }
 function renderQuizQ(){
   if (QUIZ_IDX >= QUIZ_QS.length){ finishQuiz(); return; }
   var q = QUIZ_QS[QUIZ_IDX];
@@ -1570,3 +1840,4 @@ if (loreSearchInp){
 window.addEventListener('resize', fitHomeWatermark);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitHomeWatermark);
 refreshHealth();
+refreshWikiIndexStatus();

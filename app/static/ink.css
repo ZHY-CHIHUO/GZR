@@ -234,6 +234,12 @@ input, select, textarea{ font-size:14.5px; }
 .cq-item-opts span.cq-right{ background:#F2F2EF; border-color:var(--accent); color:var(--accent); font-weight:700; }
 .cq-empty{ padding:14px 0; color:var(--muted); font-size:13.5px; text-align:center; }
 #cq-import{ width:100%; min-height:132px; font-family:Consolas,Monaco,monospace; font-size:12.5px; }
+.cq-import-actions{ display:flex; justify-content:flex-end; gap:10px; }
+.cq-import-result{ min-height:20px; margin-top:10px; color:var(--muted); font-size:12.5px; line-height:1.6; text-align:right; }
+.cq-import-result.ok{ color:#2E6B45; }
+.cq-import-result.error{ color:var(--accent); }
+.cq-json-example{ max-height:min(52vh,460px); margin:0; padding:14px; overflow:auto; border:1px solid var(--line); border-radius:4px; background:#FAFAF8; color:var(--ink); font:12.5px/1.65 Consolas,Monaco,monospace; white-space:pre; }
+.cq-import-rules{ margin-top:12px; color:var(--muted); font-size:12.5px; line-height:1.7; }
 /* ---- 回答中的相关词条 ---- */
 .wiki-cites{ display:flex; align-items:center; flex-wrap:wrap; gap:7px; margin-top:10px; padding:8px 12px; border:1px dashed var(--line); border-radius:4px; background:#FAFAF8; }
 .wiki-cites-label{ font-size:12px; color:var(--muted); letter-spacing:1px; }
@@ -250,3 +256,59 @@ input, select, textarea{ font-size:14.5px; }
 .src-web{ border-left:3px solid var(--accent) !important; }
 .toggle-row{ display:flex; align-items:flex-start; gap:8px; font-size:13.5px; line-height:1.7; color:#333; cursor:pointer; }
 .toggle-row input{ margin-top:3px; }
+.wiki-index-actions{ display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:12px; }
+.wiki-index-actions .result{ flex:1 1 280px; margin:0; }
+/* ---- 资料包 ---- */
+.data-pack-intro{ margin:0 0 14px; color:#45413d; font-size:13px; line-height:1.7; }
+.data-pack-intro > p{ margin:0; }
+.data-pack-intro code{ font-size:12px; }
+.data-pack-guide{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:10px 0 8px; padding:0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+.data-pack-guide > div{ min-width:0; padding:9px 12px 10px 0; }
+.data-pack-guide > div + div{ padding-left:12px; border-left:1px solid var(--line); }
+.data-pack-guide dt{ margin:0 0 3px; color:#26221f; font-size:13px; font-weight:700; }
+.data-pack-guide dd{ margin:0; color:var(--muted); font-size:12px; line-height:1.65; }
+.data-pack-note{ color:var(--muted); font-size:12px; }
+.data-pack-actions{ display:flex; flex-wrap:wrap; gap:9px; }
+.data-pack-actions .btn{ min-width:112px; }
+.data-pack-preview-body{ display:flex; flex-direction:column; gap:14px; }
+.data-pack-preview-summary{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:3px 14px; align-items:baseline; padding-bottom:12px; border-bottom:1px solid var(--line); }
+.data-pack-preview-summary strong{ font-size:16px; }
+.data-pack-preview-summary span{ min-width:0; color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right; }
+.data-pack-preview-summary small{ grid-column:1 / -1; color:var(--muted); font-size:12px; }
+.data-pack-warning{ margin:0; padding:9px 11px; border-left:3px solid var(--accent); background:#FAEDE9; color:#6b3027; font-size:13px; line-height:1.7; }
+.data-pack-preview-section{ padding-bottom:13px; border-bottom:1px solid #EFEFEF; }
+.data-pack-preview-section:last-child{ padding-bottom:0; border-bottom:0; }
+.data-pack-preview-section h3{ display:flex; align-items:baseline; gap:7px; margin:0 0 8px; font-size:14px; }
+.data-pack-preview-section h3 em{ color:var(--muted); font-size:12px; font-style:normal; font-weight:400; }
+.data-pack-file-list{ max-height:160px; margin:0; padding:0; overflow:auto; list-style:none; border:1px solid var(--line); background:#FAFAF8; }
+.data-pack-file-list li{ display:flex; justify-content:space-between; gap:12px; padding:6px 9px; border-bottom:1px solid #ECECE8; font-size:12px; }
+.data-pack-file-list li:last-child{ border-bottom:0; }
+.data-pack-file-list code{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:transparent; padding:0; }
+.data-pack-file-list span{ flex:none; color:var(--muted); }
+.data-pack-stats{ display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); border:1px solid var(--line); }
+.data-pack-stats div{ display:flex; flex-direction:column; gap:2px; padding:8px 7px; border-right:1px solid var(--line); }
+.data-pack-stats div:last-child{ border-right:0; }
+.data-pack-stats span{ color:var(--muted); font-size:11.5px; }
+.data-pack-stats b{ font-size:15px; font-variant-numeric:tabular-nums; }
+.data-pack-stats .has-conflict b{ color:var(--accent); }
+.data-pack-conflicts ul{ max-height:130px; margin:0; padding:7px 10px 7px 28px; overflow:auto; border:1px solid #E4C4BC; background:#FFF9F7; color:#6b3027; font-size:12.5px; line-height:1.65; }
+.data-pack-index p{ margin:3px 0; color:var(--muted); font-size:12.5px; line-height:1.65; }
+.data-pack-import-controls{ display:flex; justify-content:flex-end; align-items:center; gap:10px; padding-top:2px; }
+.data-pack-import-controls label{ font-size:13px; font-weight:700; }
+.data-pack-import-controls select{ width:auto; min-width:172px; margin:0; padding:7px 9px; }
+.result.warn{ color:#8A5A15; }
+@media (max-width:620px){
+  .wiki-index-actions{ align-items:stretch; flex-direction:column; }
+  .wiki-index-actions .result{ flex-basis:auto; }
+  .data-pack-guide{ grid-template-columns:1fr; }
+  .data-pack-guide > div{ padding:9px 0; }
+  .data-pack-guide > div + div{ padding-left:0; border-top:1px solid var(--line); border-left:0; }
+  .data-pack-actions .btn{ flex:1 1 100%; }
+  .data-pack-preview-summary{ grid-template-columns:1fr; }
+  .data-pack-preview-summary span{ text-align:left; }
+  .data-pack-stats{ grid-template-columns:repeat(3, minmax(0, 1fr)); }
+  .data-pack-stats div:nth-child(3){ border-right:0; }
+  .data-pack-stats div:nth-child(-n+3){ border-bottom:1px solid var(--line); }
+  .data-pack-import-controls{ align-items:stretch; flex-direction:column; }
+  .data-pack-import-controls select{ width:100%; }
+}

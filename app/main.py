@@ -2,29 +2,135 @@
 """《蛊真人》RAG 本地网页服务。
 启动：uvicorn app.main:app --port 8000
 """
+import hashlib
+import io
 import json
 import os
 import re
+import subprocess
+import sys
+import threading
+import time
+import zipfile
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import numpy as np
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import config, library
 from .rag import Retriever, ask_llm, build_prompt, estimate_cost, format_source, mock_answer
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
 retriever: Retriever | None = None
+_wiki_index_job_lock = threading.Lock()
+_wiki_index_job = {
+    "state": "idle",
+    "startedAt": "",
+    "finishedAt": "",
+    "durationSeconds": 0,
+    "output": "",
+    "error": "",
+}
 
 
 def reload_retriever():
     global retriever
     retriever = Retriever(config.DATA_DIR, config.MODEL_CACHE, top_k=config.TOP_K)
+
+
+def _wiki_index_job_snapshot():
+    with _wiki_index_job_lock:
+        return dict(_wiki_index_job)
+
+
+def _update_wiki_index_job(**changes):
+    with _wiki_index_job_lock:
+        _wiki_index_job.update(changes)
+
+
+def _wiki_index_disk_status():
+    wiki_path = config.DATA_DIR / "wiki.json"
+    meta_path = config.DATA_DIR / "wiki" / "meta.json"
+    vector_path = config.DATA_DIR / "wiki" / "vectors.npy"
+    try:
+        if not wiki_path.is_file() or not meta_path.is_file() or not vector_path.is_file():
+            return {"available": False, "valid": False, "reason": "尚未建立百科索引"}
+        wiki = json.loads(wiki_path.read_text(encoding="utf-8"))
+        expected_meta = _wiki_index_metadata(wiki)
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        vectors = np.load(vector_path, mmap_mode="r", allow_pickle=False)
+        dimension = int(vectors.shape[1]) if vectors.ndim == 2 else 0
+        entries = int(vectors.shape[0]) if vectors.ndim == 2 else 0
+        if not isinstance(meta, list) or vectors.ndim != 2 or dimension != 768:
+            return {"available": True, "valid": False, "entries": entries, "dimension": dimension,
+                    "reason": "百科索引维度不为 768"}
+        if len(meta) != entries or len(expected_meta) != entries:
+            return {"available": True, "valid": False, "entries": entries, "dimension": dimension,
+                    "reason": "百科索引条目数与当前资料不匹配"}
+        if not _data_pack_same(meta, expected_meta):
+            return {"available": True, "valid": False, "entries": entries, "dimension": dimension,
+                    "reason": "百科索引与当前资料不匹配"}
+        return {"available": True, "valid": True, "entries": entries, "dimension": dimension,
+                "reason": "索引可用"}
+    except Exception as e:
+        return {"available": False, "valid": False, "reason": f"索引检查失败：{str(e)[:160]}"}
+
+
+def _run_wiki_index_build():
+    started = time.monotonic()
+    command = [sys.executable, "scripts/build_wiki_store.py"]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=config.BASE,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()[-6000:]
+        duration = round(time.monotonic() - started, 1)
+        if result.returncode != 0:
+            _update_wiki_index_job(
+                state="failed",
+                finishedAt=datetime.now(timezone.utc).isoformat(),
+                durationSeconds=duration,
+                output=output,
+                error=f"重建脚本退出码为 {result.returncode}",
+            )
+            return
+        reload_retriever()
+        index = _wiki_index_disk_status()
+        if not index.get("valid"):
+            _update_wiki_index_job(
+                state="failed",
+                finishedAt=datetime.now(timezone.utc).isoformat(),
+                durationSeconds=duration,
+                output=output,
+                error=index.get("reason", "重建后的索引校验失败"),
+            )
+            return
+        _update_wiki_index_job(
+            state="completed",
+            finishedAt=datetime.now(timezone.utc).isoformat(),
+            durationSeconds=duration,
+            output=output,
+            error="",
+        )
+    except Exception as e:
+        _update_wiki_index_job(
+            state="failed",
+            finishedAt=datetime.now(timezone.utc).isoformat(),
+            durationSeconds=round(time.monotonic() - started, 1),
+            error=str(e)[:600],
+        )
 
 
 @asynccontextmanager
@@ -673,6 +779,28 @@ def test_settings(req: TestReq):
         return {"ok": False, "error": str(e)[:300], "message": "连接失败"}
 
 
+@app.get("/api/wiki-index/status")
+def wiki_index_status():
+    return {"ok": True, "job": _wiki_index_job_snapshot(), "index": _wiki_index_disk_status()}
+
+
+@app.post("/api/wiki-index/build")
+def wiki_index_build():
+    with _wiki_index_job_lock:
+        if _wiki_index_job["state"] == "running":
+            return JSONResponse({"ok": False, "error": "百科索引正在重建"}, status_code=409)
+        _wiki_index_job.update({
+            "state": "running",
+            "startedAt": datetime.now(timezone.utc).isoformat(),
+            "finishedAt": "",
+            "durationSeconds": 0,
+            "output": "",
+            "error": "",
+        })
+    threading.Thread(target=_run_wiki_index_build, name="wiki-index-build", daemon=True).start()
+    return {"ok": True, "job": _wiki_index_job_snapshot(), "index": _wiki_index_disk_status()}
+
+
 # ---------- 百科与游戏 ----------
 
 
@@ -824,6 +952,7 @@ def wiki_all():
         "tree": tree,
         "stats": stats,
         "groups": groups,
+        "customCategories": [name for name in _load_custom_wiki_categories() if name in tree],
     }
 
 
@@ -885,6 +1014,43 @@ class WikiEntryReq(BaseModel):
     delete: bool = False
 
 
+class WikiCategoryReq(BaseModel):
+    name: str | None = None
+
+
+def _wiki_category_meta_path():
+    return config.DATA_DIR / "wiki_categories.json"
+
+
+def _load_custom_wiki_categories():
+    try:
+        payload = json.loads(_wiki_category_meta_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return []
+    categories = payload.get("custom") if isinstance(payload, dict) else None
+    if not isinstance(categories, list):
+        return []
+    return list(dict.fromkeys(name for name in categories if isinstance(name, str) and name))
+
+
+def _save_custom_wiki_categories(categories):
+    _wiki_category_meta_path().write_text(
+        json.dumps({"custom": list(dict.fromkeys(categories))}, ensure_ascii=False, indent=1),
+        encoding="utf-8",
+    )
+
+
+def _normalize_wiki_category_name(name):
+    value = str(name or "").strip()
+    if not value:
+        return None, "分类名称不能为空"
+    if len(value) > 40:
+        return None, "分类名称不能超过 40 个字符"
+    if value.startswith("_") or any(token in value for token in ("/", "\\", "\n", "\r", "\x00")):
+        return None, "分类名称包含不允许的字符"
+    return value, None
+
+
 def _wiki_node_at(data, cat, group_path, create=False):
     if create and not isinstance(data.get(cat), dict):
         data[cat] = {}
@@ -907,8 +1073,66 @@ def _prune_wiki_groups(data, cat, group_path):
         if not isinstance(parent, dict) or not isinstance(parent.get(child_name), dict) or parent[child_name]:
             break
         parent.pop(child_name, None)
-    if isinstance(data.get(cat), dict) and not data[cat]:
-        data.pop(cat, None)
+    # Keep the top-level category even after its final entry is removed.  This
+    # preserves existing categories and lets an empty custom category be
+    # explicitly managed through the category API.
+
+
+@app.post("/api/wiki/categories")
+def wiki_category_create(req: WikiCategoryReq):
+    name, error = _normalize_wiki_category_name(req.name)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=400)
+    _load_content()
+    file_path = config.DATA_DIR / "wiki.json"
+    try:
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
+    if name in data:
+        return JSONResponse({"ok": False, "error": "分类已存在"}, status_code=409)
+
+    custom_categories = _load_custom_wiki_categories()
+    data[name] = {}
+    try:
+        file_path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        _save_custom_wiki_categories([*custom_categories, name])
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"写入分类失败：{e}"}, status_code=500)
+    _content_mtime["wiki"] = None
+    return {"ok": True, "category": name}
+
+
+@app.post("/api/wiki/categories/delete")
+def wiki_category_delete(req: WikiCategoryReq):
+    name, error = _normalize_wiki_category_name(req.name)
+    if error:
+        return JSONResponse({"ok": False, "error": error}, status_code=400)
+    _load_content()
+    custom_categories = _load_custom_wiki_categories()
+    if name not in custom_categories:
+        return JSONResponse({"ok": False, "error": "现有分类受保护，不能删除"}, status_code=403)
+    file_path = config.DATA_DIR / "wiki.json"
+    try:
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
+    category = data.get(name)
+    if category is None:
+        return JSONResponse({"ok": False, "error": "分类不存在"}, status_code=404)
+    if not isinstance(category, dict):
+        return JSONResponse({"ok": False, "error": "分类数据格式错误"}, status_code=409)
+    if category:
+        return JSONResponse({"ok": False, "error": "分类仍有词条，清空后才能删除"}, status_code=409)
+
+    data.pop(name)
+    try:
+        file_path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        _save_custom_wiki_categories([item for item in custom_categories if item != name])
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"删除分类失败：{e}"}, status_code=500)
+    _content_mtime["wiki"] = None
+    return {"ok": True, "category": name, "deleted": 1}
 
 
 @app.post("/api/wiki/update")
@@ -923,20 +1147,30 @@ def wiki_update(req: WikiEntryReq):
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"读取资料库失败：{e}"}, status_code=500)
 
+    if (req.old_cat is not None or req.old_name is not None) and req.old_path is None:
+        return JSONResponse({"ok": False, "error": "编辑请求缺少旧路径"}, status_code=400)
+    if req.delete and req.old_path is None and req.path is None:
+        return JSONResponse({"ok": False, "error": "删除请求缺少完整路径"}, status_code=400)
+
     old_cat, old_name = req.old_cat or req.cat, req.old_name or req.name
-    old_path = list(req.old_path or [])
+    old_path = list(req.old_path if req.old_path is not None else (req.path or []))
     parent = _wiki_node_at(data, old_cat, old_path) if old_cat and old_name else None
     entry = parent.get(old_name) if isinstance(parent, dict) else None
     if entry is not None and not _is_wiki_leaf(entry):
         entry = None
 
-    if entry is None and req.delete:
+    # Requests carrying an old identity are edits/moves, never creates.  A
+    # stale or incomplete old path must fail loudly instead of silently adding
+    # a second entry at the requested target path.
+    if entry is None and (req.delete or req.old_cat is not None or req.old_name is not None):
         return JSONResponse({"ok": False, "error": "条目不存在"}, status_code=404)
     if entry is None:
         new_name = (req.name or "").strip()
         if not new_name:
             return JSONResponse({"ok": False, "error": "名称不能为空"}, status_code=400)
         target_cat = req.cat or old_cat
+        if target_cat == "_deleted" or not isinstance(data.get(target_cat), dict):
+            return JSONResponse({"ok": False, "error": "分类不存在，请先新增分类"}, status_code=404)
         target_path = list(req.path if req.path is not None else ([req.sub] if req.sub else []))
         target = _wiki_node_at(data, target_cat, target_path, create=True)
         if new_name in target:
@@ -958,9 +1192,11 @@ def wiki_update(req: WikiEntryReq):
     else:
         target_cat = req.cat or old_cat
         target_name = (req.name or old_name).strip()
-        target_path = list(req.path if req.path is not None else (old_path if req.sub is None else ([req.sub] if req.sub else [])))
+        target_path = list(req.path if req.path is not None else old_path)
         if not target_name:
             return JSONResponse({"ok": False, "error": "名称不能为空"}, status_code=400)
+        if target_cat == "_deleted" or not isinstance(data.get(target_cat), dict):
+            return JSONResponse({"ok": False, "error": "目标分类不存在，请先新增分类"}, status_code=404)
         updated = dict(entry)
         if req.section is not None:
             updated["section"] = req.section.strip()
@@ -987,7 +1223,7 @@ def wiki_update(req: WikiEntryReq):
 class WikiTrashReq(BaseModel):
     cat: str
     name: str
-    path: list[str] | None = None
+    path: list[str]
 
 
 @app.get("/api/wiki/trash")
@@ -998,7 +1234,7 @@ def wiki_trash_list():
 
 def _take_trashed_entry(data, req):
     for index, item in enumerate(data.get("_deleted", [])):
-        if item.get("cat") == req.cat and item.get("name") == req.name and (req.path is None or item.get("path", []) == req.path):
+        if item.get("cat") == req.cat and item.get("name") == req.name and item.get("path", []) == req.path:
             return index, item
     return None, None
 
@@ -1048,6 +1284,583 @@ def wiki_trash_purge(req: WikiTrashReq):
     file_path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     _content_mtime["wiki"] = None
     return {"ok": True, "purged": 1}
+
+
+DATA_PACK_FORMAT = "gzr-data-pack"
+DATA_PACK_VERSION = 1
+DATA_PACK_MAX_BYTES = 128 * 1024 * 1024
+DATA_PACK_EDITABLE_PATHS = {
+    "data/wiki.json",
+    "data/wiki_categories.json",
+    "data/quiz.json",
+    "data/wiki/meta.json",
+    "data/wiki/vectors.npy",
+    "browser/custom_quiz.json",
+}
+
+
+class DataPackExportReq(BaseModel):
+    kind: str = "editable"
+    custom_quiz: list = []
+
+
+def _data_pack_sha256(payload):
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _data_pack_json_bytes(value):
+    return json.dumps(value, ensure_ascii=False, indent=1).encode("utf-8")
+
+
+def _data_pack_json(payload, label):
+    try:
+        return json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, TypeError) as e:
+        raise ValueError(f"{label} 不是有效 JSON：{e}") from e
+
+
+def _data_pack_read_json_file(name, fallback):
+    path = config.DATA_DIR / name
+    if not path.is_file():
+        return fallback
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return fallback
+
+
+def _data_pack_wiki_entries(data):
+    return sum(1 for _cat, _path, _entry in _iter_wiki_paths(data if isinstance(data, dict) else {}))
+
+
+def _data_pack_safe_member(name, kind):
+    if not isinstance(name, str) or not name or "\\" in name or name.startswith("/"):
+        return False
+    parts = name.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        return False
+    if kind == "editable":
+        return name in DATA_PACK_EDITABLE_PATHS
+    if name == "browser/custom_quiz.json":
+        return True
+    return name.startswith("data/") and Path(name).suffix.lower() in {".json", ".npy"}
+
+
+def _data_pack_source_files(kind, custom_quiz):
+    if kind not in ("editable", "full"):
+        raise ValueError("资料包类型无效")
+    files = {}
+    if kind == "editable":
+        for relative in ("wiki.json", "wiki_categories.json", "quiz.json", "wiki/meta.json", "wiki/vectors.npy"):
+            path = config.DATA_DIR / relative
+            if path.is_file():
+                files[f"data/{relative}"] = path.read_bytes()
+    else:
+        for path in config.DATA_DIR.rglob("*"):
+            if path.is_file():
+                relative = path.relative_to(config.DATA_DIR).as_posix()
+                if Path(relative).suffix.lower() in {".json", ".npy"}:
+                    files[f"data/{relative}"] = path.read_bytes()
+    if "data/wiki.json" not in files or "data/quiz.json" not in files:
+        raise ValueError("当前资料库缺少 wiki.json 或 quiz.json")
+    files["browser/custom_quiz.json"] = _data_pack_json_bytes(custom_quiz if isinstance(custom_quiz, list) else [])
+    return files
+
+
+def _build_data_pack(kind, custom_quiz):
+    files = _data_pack_source_files(kind, custom_quiz)
+    wiki = _data_pack_json(files["data/wiki.json"], "wiki.json")
+    info = _data_pack_read_json_file("info.json", {})
+    wiki_sha = _data_pack_sha256(files["data/wiki.json"])
+    has_wiki_index = {"data/wiki/meta.json", "data/wiki/vectors.npy"}.issubset(files)
+    manifest = {
+        "format": DATA_PACK_FORMAT,
+        "version": DATA_PACK_VERSION,
+        "kind": kind,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "model": info.get("model", ""),
+        "wiki": {"sha256": wiki_sha, "entries": _data_pack_wiki_entries(wiki)},
+        "wikiIndex": {
+            "included": has_wiki_index,
+            "sourceSha256": wiki_sha if has_wiki_index else "",
+            "dimension": 768 if has_wiki_index else 0,
+        },
+        "files": [
+            {"path": name, "sha256": _data_pack_sha256(payload), "bytes": len(payload)}
+            for name, payload in sorted(files.items())
+        ],
+    }
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        archive.writestr("manifest.json", _data_pack_json_bytes(manifest))
+        for name, payload in sorted(files.items()):
+            archive.writestr(name, payload)
+    return stream.getvalue()
+
+
+def _load_data_pack(payload):
+    if not payload or len(payload) > DATA_PACK_MAX_BYTES:
+        raise ValueError("资料包为空或超过 128 MB 限制")
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(payload))
+    except zipfile.BadZipFile as e:
+        raise ValueError("不是有效的资料包 ZIP 文件") from e
+    with archive:
+        infos = [info for info in archive.infolist() if not info.is_dir()]
+        if any(info.flag_bits & 0x1 for info in infos):
+            raise ValueError("资料包不能包含加密文件")
+        if sum(info.file_size for info in infos) > DATA_PACK_MAX_BYTES:
+            raise ValueError("资料包解压后的数据超过 128 MB 限制")
+        names = {info.filename for info in infos}
+        if "manifest.json" not in names:
+            raise ValueError("资料包缺少 manifest.json")
+        manifest = _data_pack_json(archive.read("manifest.json"), "manifest.json")
+        if not isinstance(manifest, dict) or manifest.get("format") != DATA_PACK_FORMAT:
+            raise ValueError("资料包格式不受支持")
+        if manifest.get("version") != DATA_PACK_VERSION:
+            raise ValueError("资料包版本不兼容")
+        kind = manifest.get("kind")
+        if kind not in ("editable", "full"):
+            raise ValueError("资料包类型无效")
+        listed = manifest.get("files")
+        if not isinstance(listed, list) or not listed:
+            raise ValueError("资料包文件清单无效")
+        listed_paths = set()
+        for item in listed:
+            if not isinstance(item, dict):
+                raise ValueError("资料包文件清单无效")
+            name = item.get("path")
+            if not _data_pack_safe_member(name, kind) or name in listed_paths:
+                raise ValueError("资料包包含不允许的文件")
+            listed_paths.add(name)
+        if names != listed_paths | {"manifest.json"}:
+            raise ValueError("资料包文件与清单不一致")
+        files = {}
+        for item in listed:
+            name = item["path"]
+            raw = archive.read(name)
+            if item.get("bytes") != len(raw) or item.get("sha256") != _data_pack_sha256(raw):
+                raise ValueError(f"资料包文件校验失败：{name}")
+            files[name] = raw
+    if "data/wiki.json" not in files or "data/quiz.json" not in files:
+        raise ValueError("资料包缺少百科或题库数据")
+    wiki = _data_pack_json(files["data/wiki.json"], "wiki.json")
+    quiz = _data_pack_json(files["data/quiz.json"], "quiz.json")
+    if not isinstance(wiki, dict) or not isinstance(quiz, dict):
+        raise ValueError("百科或题库数据格式无效")
+    custom_quiz = _data_pack_json(files.get("browser/custom_quiz.json", b"[]"), "自定义题库")
+    if not isinstance(custom_quiz, list):
+        raise ValueError("自定义题库格式无效")
+    if kind == "full":
+        if "data/info.json" not in files:
+            raise ValueError("完整离线包缺少 info.json")
+        for name, raw in files.items():
+            if name.endswith(".npy"):
+                try:
+                    np.load(io.BytesIO(raw), allow_pickle=False)
+                except Exception as e:
+                    raise ValueError(f"向量文件无效：{name}") from e
+        incoming_info = _data_pack_json(files["data/info.json"], "info.json")
+        current_info = _data_pack_read_json_file("info.json", {})
+        if incoming_info.get("model") != current_info.get("model"):
+            raise ValueError("完整离线包的向量模型与当前项目不一致")
+    return manifest, files
+
+
+def _wiki_identity_map(data):
+    entries = {}
+    for cat, path, entry in _iter_wiki_paths(data if isinstance(data, dict) else {}):
+        name = str(entry.get("name") or "")
+        if name:
+            entries[(cat, tuple(path), name)] = {key: value for key, value in entry.items() if key != "name"}
+    return entries
+
+
+def _wiki_index_metadata(data):
+    """Recreate the metadata written by scripts/build_wiki_store.py.
+
+    A matching vector count is not enough: edited descriptions can leave the
+    count unchanged while making every embedding stale.
+    """
+
+    docs = []
+    for cat, path, entry in _iter_wiki_paths(data if isinstance(data, dict) else {}):
+        name = str(entry.get("name") or "").strip()
+        if not name:
+            continue
+        parts = []
+        if entry.get("intro"):
+            parts.append(str(entry["intro"]).strip())
+        for section in entry.get("sections") or []:
+            if not isinstance(section, dict):
+                continue
+            text = str(section.get("text") or "").strip()
+            if text:
+                parts.append(text)
+        if not parts:
+            desc = str(entry.get("desc") or "").strip()
+            if not desc:
+                continue
+            parts.append(desc)
+        sub = path[-1] if path else "其他"
+        tier = path[-1] if path else ""
+        aliases = [str(value).strip() for value in (entry.get("aliases") or []) if str(value).strip()]
+        text = name + "：" + "\n".join(parts)
+        if aliases:
+            text += "（别名：" + "、".join(aliases) + "）"
+        if tier and tier != "其他":
+            text += "【" + tier + "】"
+        elif sub and sub != "其他":
+            text += "（" + sub + "）"
+        docs.append({
+            "type": "wiki",
+            "name": name,
+            "cat": cat,
+            "path": path,
+            "sub": sub,
+            "tier": tier,
+            "aliases": aliases,
+            "section": entry.get("section") or "",
+            "source_path": " / ".join([cat] + path),
+            "text": text,
+        })
+    return docs
+
+
+def _data_pack_same(left, right):
+    return json.dumps(left, ensure_ascii=False, sort_keys=True, separators=(",", ":")) == json.dumps(
+        right, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+
+
+def _validate_data_pack_wiki_index(manifest, files):
+    required = {"data/wiki/meta.json", "data/wiki/vectors.npy"}
+    if not required.issubset(files):
+        return {"included": False, "usable": False, "reason": "未包含百科索引"}
+    wiki_sha = _data_pack_sha256(files["data/wiki.json"])
+    descriptor = manifest.get("wikiIndex") if isinstance(manifest.get("wikiIndex"), dict) else {}
+    if descriptor.get("sourceSha256") != wiki_sha or manifest.get("wiki", {}).get("sha256") != wiki_sha:
+        return {"included": True, "usable": False, "reason": "索引与百科正文哈希不匹配"}
+    current_info = _data_pack_read_json_file("info.json", {})
+    if manifest.get("model") != current_info.get("model"):
+        return {"included": True, "usable": False, "reason": "索引模型与当前项目不一致"}
+    try:
+        meta = _data_pack_json(files["data/wiki/meta.json"], "百科索引元数据")
+        vectors = np.load(io.BytesIO(files["data/wiki/vectors.npy"]), allow_pickle=False)
+    except Exception:
+        return {"included": True, "usable": False, "reason": "百科索引文件无效"}
+    expected_meta = _wiki_index_metadata(_data_pack_json(files["data/wiki.json"], "wiki.json"))
+    if not isinstance(meta, list) or vectors.ndim != 2 or vectors.shape[1] != 768:
+        return {"included": True, "usable": False, "reason": "百科索引维度不为 768"}
+    if len(meta) != vectors.shape[0] or len(meta) != len(expected_meta):
+        return {"included": True, "usable": False, "reason": "百科索引条目数不匹配"}
+    if not _data_pack_same(meta, expected_meta):
+        return {"included": True, "usable": False, "reason": "百科索引内容与百科正文不匹配"}
+    return {"included": True, "usable": True, "reason": "索引可直接启用", "entries": len(expected_meta), "dimension": 768}
+
+
+def _data_pack_preview(manifest, files):
+    incoming_wiki = _data_pack_json(files["data/wiki.json"], "wiki.json")
+    current_wiki = _data_pack_read_json_file("wiki.json", {})
+    incoming_quiz = _data_pack_json(files["data/quiz.json"], "quiz.json")
+    current_quiz = _data_pack_read_json_file("quiz.json", {"quiz": [], "riddles": {}})
+    incoming_entries = _wiki_identity_map(incoming_wiki)
+    current_entries = _wiki_identity_map(current_wiki)
+    wiki_preview = _data_pack_entry_preview(
+        incoming_entries,
+        current_entries,
+        lambda identity, _value: {"cat": identity[0], "path": list(identity[1]), "name": identity[2]},
+    )
+    incoming_quiz_entries = _quiz_identity_map(incoming_quiz)
+    current_quiz_entries = _quiz_identity_map(current_quiz)
+    quiz_preview = _data_pack_entry_preview(
+        incoming_quiz_entries,
+        current_quiz_entries,
+        lambda identity, value: {"kind": identity[0], "type": value.get("type", identity[1]), "name": identity[2]},
+    )
+    return {
+        "kind": manifest["kind"],
+        "createdAt": manifest.get("createdAt", ""),
+        "files": [{"path": item["path"], "bytes": item["bytes"]} for item in manifest["files"]],
+        "wiki": wiki_preview,
+        "quiz": quiz_preview,
+        "customQuizEntries": len(_data_pack_json(files.get("browser/custom_quiz.json", b"[]"), "自定义题库")),
+        "wikiIndex": _validate_data_pack_wiki_index(manifest, files),
+    }
+
+
+def _data_pack_entry_preview(incoming, current, sample_for):
+    added = identical = conflicts = 0
+    samples = []
+    for identity, incoming_value in incoming.items():
+        current_value = current.get(identity)
+        if current_value is None:
+            added += 1
+        elif _data_pack_same(current_value, incoming_value):
+            identical += 1
+        else:
+            conflicts += 1
+            if len(samples) < 12:
+                samples.append(sample_for(identity, incoming_value))
+    return {
+        "incomingEntries": len(incoming),
+        "localEntries": len(current),
+        "newEntries": added,
+        "identicalEntries": identical,
+        "conflicts": conflicts,
+        "conflictSamples": samples,
+    }
+
+
+def _quiz_identity_map(data):
+    entries = {}
+    if not isinstance(data, dict):
+        return entries
+    for item in data.get("quiz", []):
+        if isinstance(item, dict) and item.get("q"):
+            entries[("quiz", "", str(item["q"]))] = item
+    for kind, values in data.get("riddles", {}).items():
+        if not isinstance(values, list):
+            continue
+        for item in values:
+            if isinstance(item, dict) and item.get("name"):
+                entries[("riddle", str(kind), str(item["name"]))] = item
+    return entries
+
+
+def _merge_wiki_data(current, incoming):
+    merged = json.loads(json.dumps(current, ensure_ascii=False))
+    stats = {"added": 0, "identical": 0, "conflicts": 0}
+    for cat, node in incoming.items():
+        if cat != "_deleted" and isinstance(node, dict) and not isinstance(merged.get(cat), dict):
+            merged[cat] = {}
+    for cat, path, entry in _iter_wiki_paths(incoming):
+        parent = _wiki_node_at(merged, cat, path, create=True)
+        name = entry["name"]
+        candidate = {key: value for key, value in entry.items() if key != "name"}
+        existing = parent.get(name)
+        if existing is None:
+            parent[name] = candidate
+            stats["added"] += 1
+        elif _data_pack_same(existing, candidate):
+            stats["identical"] += 1
+        else:
+            stats["conflicts"] += 1
+    trash = list(merged.get("_deleted", []))
+    known = {
+        (item.get("cat"), tuple(item.get("path", [])), item.get("name"), item.get("deletedAt"))
+        for item in trash if isinstance(item, dict)
+    }
+    for item in incoming.get("_deleted", []):
+        if not isinstance(item, dict):
+            continue
+        key = (item.get("cat"), tuple(item.get("path", [])), item.get("name"), item.get("deletedAt"))
+        if key not in known:
+            trash.append(item)
+            known.add(key)
+    if trash:
+        merged["_deleted"] = trash
+    return merged, stats
+
+
+def _merge_quiz_data(current, incoming):
+    merged = json.loads(json.dumps(current, ensure_ascii=False))
+    merged.setdefault("quiz", [])
+    merged.setdefault("riddles", {})
+    stats = {"added": 0, "conflicts": 0}
+    quiz_by_question = {item.get("q"): item for item in merged["quiz"] if isinstance(item, dict) and item.get("q")}
+    for item in incoming.get("quiz", []):
+        if not isinstance(item, dict) or not item.get("q"):
+            continue
+        existing = quiz_by_question.get(item["q"])
+        if existing is None:
+            merged["quiz"].append(item)
+            quiz_by_question[item["q"]] = item
+            stats["added"] += 1
+        elif not _data_pack_same(existing, item):
+            stats["conflicts"] += 1
+    for kind, values in incoming.get("riddles", {}).items():
+        if not isinstance(values, list):
+            continue
+        target = merged["riddles"].setdefault(kind, [])
+        by_name = {item.get("name"): item for item in target if isinstance(item, dict) and item.get("name")}
+        for item in values:
+            if not isinstance(item, dict) or not item.get("name"):
+                continue
+            existing = by_name.get(item["name"])
+            if existing is None:
+                target.append(item)
+                by_name[item["name"]] = item
+                stats["added"] += 1
+            elif not _data_pack_same(existing, item):
+                stats["conflicts"] += 1
+    return merged, stats
+
+
+def _category_names_from_payload(payload):
+    if not isinstance(payload, dict) or not isinstance(payload.get("custom"), list):
+        return []
+    return [name for name in payload["custom"] if isinstance(name, str) and name]
+
+
+def _merge_category_meta(current_wiki, merged_wiki, current_meta, incoming_meta):
+    existing_categories = {name for name, value in current_wiki.items() if name != "_deleted" and isinstance(value, dict)}
+    names = list(dict.fromkeys(_category_names_from_payload(current_meta)))
+    for name in _category_names_from_payload(incoming_meta):
+        if name in names or name not in merged_wiki or name == "_deleted":
+            continue
+        if name not in existing_categories:
+            names.append(name)
+    return {"custom": names}
+
+
+def _data_pack_backup():
+    backup_dir = config.BASE / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = backup_dir / f"data-before-import-{stamp}.zip"
+    suffix = 2
+    while backup_path.exists():
+        backup_path = backup_dir / f"data-before-import-{stamp}-{suffix}.zip"
+        suffix += 1
+    with zipfile.ZipFile(backup_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+        for path in config.DATA_DIR.rglob("*"):
+            if path.is_file():
+                archive.write(path, f"data/{path.relative_to(config.DATA_DIR).as_posix()}")
+    return str(backup_path.relative_to(config.BASE))
+
+
+def _data_pack_write_member(relative, payload):
+    root = config.DATA_DIR.resolve()
+    target = (root / relative).resolve()
+    if root not in target.parents:
+        raise ValueError("资料包目标路径无效")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + ".import-tmp")
+    temporary.write_bytes(payload)
+    os.replace(temporary, target)
+
+
+def _data_pack_remove_member(relative):
+    root = config.DATA_DIR.resolve()
+    target = (root / relative).resolve()
+    if root not in target.parents:
+        raise ValueError("资料包目标路径无效")
+    if target.is_file():
+        target.unlink()
+
+
+def _data_pack_remove_missing_full_members(files):
+    included = {
+        name.removeprefix("data/")
+        for name in files
+        if name.startswith("data/")
+    }
+    for path in config.DATA_DIR.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in {".json", ".npy"}:
+            continue
+        relative = path.relative_to(config.DATA_DIR).as_posix()
+        if relative not in included:
+            _data_pack_remove_member(relative)
+
+
+def _apply_data_pack(manifest, files, mode):
+    if mode not in ("merge", "replace"):
+        raise ValueError("导入方式无效")
+    kind = manifest["kind"]
+    if kind == "full" and mode != "replace":
+        raise ValueError("完整离线包只能覆盖导入")
+    incoming_wiki = _data_pack_json(files["data/wiki.json"], "wiki.json")
+    incoming_quiz = _data_pack_json(files["data/quiz.json"], "quiz.json")
+    incoming_categories = _data_pack_json(files.get("data/wiki_categories.json", b"{}"), "分类数据")
+    index = _validate_data_pack_wiki_index(manifest, files)
+    backup = _data_pack_backup()
+    wiki_changed = False
+    index_installed = False
+    summary = {"wikiAdded": 0, "wikiConflicts": 0, "quizAdded": 0, "quizConflicts": 0}
+    if mode == "replace":
+        for name, raw in files.items():
+            if not name.startswith("data/"):
+                continue
+            relative = name.removeprefix("data/")
+            if name in {"data/wiki/meta.json", "data/wiki/vectors.npy"} and not index["usable"]:
+                continue
+            _data_pack_write_member(relative, raw)
+        if kind == "full":
+            _data_pack_remove_missing_full_members(files)
+        if kind == "editable" and "data/wiki_categories.json" not in files:
+            _data_pack_remove_member("wiki_categories.json")
+        if not index["usable"]:
+            _data_pack_remove_member("wiki/meta.json")
+            _data_pack_remove_member("wiki/vectors.npy")
+        wiki_changed = True
+        index_installed = bool(index["usable"])
+    else:
+        current_wiki = _data_pack_read_json_file("wiki.json", {})
+        current_quiz = _data_pack_read_json_file("quiz.json", {"quiz": [], "riddles": {}})
+        current_categories = _data_pack_read_json_file("wiki_categories.json", {})
+        merged_wiki, wiki_stats = _merge_wiki_data(current_wiki, incoming_wiki)
+        merged_quiz, quiz_stats = _merge_quiz_data(current_quiz, incoming_quiz)
+        merged_categories = _merge_category_meta(current_wiki, merged_wiki, current_categories, incoming_categories)
+        _data_pack_write_member("wiki.json", _data_pack_json_bytes(merged_wiki))
+        _data_pack_write_member("quiz.json", _data_pack_json_bytes(merged_quiz))
+        _data_pack_write_member("wiki_categories.json", _data_pack_json_bytes(merged_categories))
+        summary.update({
+            "wikiAdded": wiki_stats["added"],
+            "wikiConflicts": wiki_stats["conflicts"],
+            "quizAdded": quiz_stats["added"],
+            "quizConflicts": quiz_stats["conflicts"],
+        })
+        wiki_changed = bool(wiki_stats["added"])
+    _content_mtime["wiki"] = None
+    _content_mtime["quiz"] = None
+    reload_error = ""
+    if index_installed or kind == "full" or mode == "replace":
+        try:
+            reload_retriever()
+        except Exception as e:
+            reload_error = str(e)
+    return {
+        "backup": backup,
+        "summary": summary,
+        "customQuiz": _data_pack_json(files.get("browser/custom_quiz.json", b"[]"), "自定义题库"),
+        "indexInstalled": index_installed,
+        "needsWikiRebuild": wiki_changed and not index_installed,
+        "reloadError": reload_error,
+    }
+
+
+@app.post("/api/data-pack/export")
+def data_pack_export(req: DataPackExportReq):
+    try:
+        payload = _build_data_pack(req.kind, req.custom_quiz)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"gzr-{req.kind}-{stamp}.gzrpack"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(io.BytesIO(payload), media_type="application/zip", headers=headers)
+
+
+@app.post("/api/data-pack/inspect")
+async def data_pack_inspect(request: Request):
+    try:
+        manifest, files = _load_data_pack(await request.body())
+        return {"ok": True, "preview": _data_pack_preview(manifest, files)}
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@app.post("/api/data-pack/import")
+async def data_pack_import(request: Request):
+    try:
+        manifest, files = _load_data_pack(await request.body())
+        result = _apply_data_pack(manifest, files, request.headers.get("x-gzr-import-mode", "merge"))
+        return {"ok": True, **result}
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"导入失败：{e}"}, status_code=500)
 
 
 class QuizReq(BaseModel):

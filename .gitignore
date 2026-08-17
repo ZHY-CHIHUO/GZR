@@ -4,4 +4,6 @@ __pycache__/
 .env
 model_cache/
 data_m3/
+.uvicorn-*.log
+service.log
 .DS_Store

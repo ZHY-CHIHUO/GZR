@@ -6,8 +6,8 @@
 <title>蛊箓 · 蛊真人维基百科</title>
 <link rel="stylesheet" href="/static/app.css?v=3">
 <link rel="stylesheet" href="/static/refine.css?v=3">
-<link rel="stylesheet" href="/static/ink.css?v=3">
-<link rel="stylesheet" href="/static/wiki-browser.css?v=5">
+<link rel="stylesheet" href="/static/ink.css?v=7">
+<link rel="stylesheet" href="/static/wiki-browser.css?v=7">
 <link rel="stylesheet" href="/static/premium.css?v=22">
 <script src="/static/pdfjs/pdf.min.js"></script>
 </head>
@@ -140,7 +140,7 @@
         </div>
         <div class="wiki-home-body">
           <section class="wiki-category-section" aria-labelledby="wiki-category-title">
-            <div class="wiki-section-head"><div><p class="wiki-overline">EXPLORE</p><h2 id="wiki-category-title">浏览分类</h2></div><span id="wiki-total-count" class="wiki-total-count"></span><span class="wiki-head-btns"><button type="button" class="wiki-add-home" onclick="openWikiTrash()">回收站</button><button type="button" class="wiki-add-home" onclick="openWikiAdd()">+ 新增词条</button></span></div>
+            <div class="wiki-section-head"><div><p class="wiki-overline">EXPLORE</p><h2 id="wiki-category-title">浏览分类</h2></div><span id="wiki-total-count" class="wiki-total-count"></span><span class="wiki-head-btns"><button type="button" class="wiki-add-home" onclick="openWikiCategoryManager()">分类管理</button><button type="button" class="wiki-add-home" onclick="openWikiTrash()">回收站</button><button type="button" class="wiki-add-home" onclick="openWikiAdd()">+ 新增词条</button></span></div>
             <div class="wiki-category-grid" id="wiki-cats"></div>
           </section>
 
@@ -241,6 +241,38 @@
       <div class="card">
         <h3><span class="step-no">3</span>检索模型</h3>
         <p>当前固定使用 <b>Jina 中文增强模型（jina-embeddings-v2-base-zh）</b>。为保证检索结果一致性，已移除模型切换功能。</p>
+        <div class="wiki-index-actions">
+          <button class="btn btn-ghost" id="wiki-index-build" type="button" onclick="startWikiIndexBuild()">重建百科索引</button>
+          <div class="result" id="wiki-index-status" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="card data-pack-card">
+        <h3><span class="step-no">4</span>资料包</h3>
+        <div class="data-pack-intro">
+          <p><b>资料包</b>是用于分享、迁移或备份资料的 <code>.gzrpack</code> 压缩文件；不包含程序、向量模型或 API 配置，需在兼容版本的本项目中导入。</p>
+          <dl class="data-pack-guide">
+            <div>
+              <dt>导出资料包</dt>
+              <dd>用于分享或增量迁移。包含百科、分类、默认题库和本机自定义题库；可用的百科索引会一并打包。</dd>
+            </div>
+            <div>
+              <dt>导入资料包</dt>
+              <dd>先查看文件清单与冲突预览。合并导入只加入新资料，遇到冲突时保留本地版本；覆盖导入会先自动备份。</dd>
+            </div>
+            <div>
+              <dt>完整离线包</dt>
+              <dd>包含全部资料文件和百科索引，适合完整备份或迁移。它只能覆盖导入，不适合与现有资料合并。</dd>
+            </div>
+          </dl>
+          <p class="data-pack-note">索引仅在百科内容、模型和 768 维度均一致时直接启用；不一致时资料仍会导入，待资料整理完成后再重建索引。</p>
+        </div>
+        <div class="data-pack-actions">
+          <button class="btn btn-primary" type="button" onclick="exportDataPack('editable')">导出资料包</button>
+          <button class="btn btn-ghost" type="button" onclick="chooseDataPackImport()">导入资料包</button>
+          <button class="btn btn-ghost" type="button" onclick="exportDataPack('full')">完整离线包</button>
+          <input id="data-pack-file" type="file" accept=".gzrpack,.zip,application/zip" hidden>
+        </div>
+        <div class="result" id="data-pack-status" aria-live="polite"></div>
       </div>
     </div>
   </section>
@@ -289,8 +321,42 @@
       <div class="cq-section">
         <div class="cq-section-title"><span class="cq-step">3</span>批量导入<span class="cq-count">（粘贴 AI 生成的 JSON 数组）</span></div>
         <textarea id="cq-import" rows="8" placeholder='[{"kind":"quiz","type":"gu","q":"...","options":["A","B","C","D"],"answer":0,"explain":"..."}, {"kind":"riddle","type":"gu","name":"春秋蝉","hints":["...","...","..."]}]'></textarea>
-        <div class="cq-submit"><button class="btn btn-ghost" onclick="importCustomQuiz()">导入 JSON</button></div>
+        <div class="cq-submit cq-import-actions"><button class="btn btn-ghost" type="button" onclick="openCustomQuizExample()">JSON 示例</button><button class="btn btn-primary" type="button" onclick="importCustomQuiz()">校验并导入</button></div>
+        <div class="cq-import-result" id="cq-import-result" aria-live="polite"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 自定义题库 JSON 示例 -->
+<div class="modal-bg" id="custom-quiz-example-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h2>题库 JSON 示例</h2><button class="modal-x" onclick="closeModal('custom-quiz-example-modal')">×</button></div>
+    <div class="modal-body">
+      <pre class="cq-json-example" id="cq-import-example">[
+  {
+    "kind": "quiz",
+    "type": "person",
+    "q": "方源的本命蛊是什么？",
+    "options": ["春秋蝉", "定仙游", "智慧蛊", "爱情蛊"],
+    "answer": 0,
+    "explain": "方源的本命蛊是春秋蝉。"
+  },
+  {
+    "kind": "riddle",
+    "type": "item",
+    "name": "玉露洞天",
+    "hints": [
+      "它由玉露仙子的仙窍所化。",
+      "它寄托于东海海底。",
+      "它后来跌落为福地。",
+      "其中藏有第十奇蛊星眸。",
+      "它曾被东海僵盟攻略。"
+    ]
+  }
+]</pre>
+      <div class="cq-import-rules">选择题需 4 个不重复的非空选项，答案序号为 0 至 3；猜谜题需 5 至 10 条非空提示。重复题会跳过。</div>
+      <div class="cq-submit"><button class="btn btn-primary" type="button" onclick="useCustomQuizExample()">填入导入框</button></div>
     </div>
   </div>
 </div>
@@ -321,6 +387,36 @@
   <div class="modal modal-wide">
     <div class="modal-head"><h2>回收站</h2><button class="modal-x" onclick="closeModal('wiki-trash-modal')">×</button></div>
     <div class="modal-body" id="wiki-trash-body"><div class="empty">加载中…</div></div>
+  </div>
+</div>
+
+<!-- 百科分类管理弹窗 -->
+<div class="modal-bg" id="wiki-category-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h2>分类管理</h2><button class="modal-x" onclick="closeModal('wiki-category-modal')">×</button></div>
+    <div class="modal-body">
+      <form class="wiki-category-create" id="wiki-category-create-form">
+        <label for="wiki-category-name">新建分类</label>
+        <input id="wiki-category-name" maxlength="40" autocomplete="off" placeholder="分类名称">
+        <button class="btn btn-primary" type="submit">新增</button>
+      </form>
+      <div class="wiki-category-admin-list" id="wiki-category-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 资料包导入预览 -->
+<div class="modal-bg" id="data-pack-preview-modal">
+  <div class="modal modal-wide">
+    <div class="modal-head"><h2>导入资料包</h2><button class="modal-x" onclick="closeModal('data-pack-preview-modal')">×</button></div>
+    <div class="modal-body">
+      <div id="data-pack-preview-body" class="data-pack-preview-body"></div>
+      <div class="data-pack-import-controls">
+        <label for="data-pack-import-mode">导入方式</label>
+        <select id="data-pack-import-mode"><option value="merge">合并导入（本地优先）</option><option value="replace">覆盖导入（自动备份）</option></select>
+        <button class="btn btn-primary" id="data-pack-confirm" type="button" onclick="importDataPack()">确认导入</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -370,7 +466,7 @@
 
 <div id="toast"></div>
 
-<script src="/static/app.js?v=18"></script>
-<script src="/static/wiki-browser.js?v=12"></script>
+<script src="/static/app.js?v=23"></script>
+<script src="/static/wiki-browser.js?v=17"></script>
 </body>
 </html>

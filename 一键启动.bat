@@ -10,6 +10,13 @@ echo        一键启动
 echo ============================================
 echo.
 
+set "RUN_PY="
+if exist "runtime\python\python.exe" (
+    set "RUN_PY=runtime\python\python.exe"
+    echo [便携版] 已使用内置 Python、依赖和 Jina 检索模型。
+    goto runtime_ready
+)
+
 set "PYCMD="
 where python >nul 2>nul && set "PYCMD=python"
 if not defined PYCMD ( where py >nul 2>nul && set "PYCMD=py -3" )
@@ -36,6 +43,9 @@ if not exist ".venv\.deps_ok" (
     if errorlevel 1 ( echo 依赖安装失败，请检查网络后重试。 & pause & exit /b 1 )
     echo ok> ".venv\.deps_ok"
 )
+set "RUN_PY=.venv\Scripts\python.exe"
+
+:runtime_ready
 
 echo [3/3] 正在启动服务，首次加载数据约需 5~15 秒，请稍候...
 set "PORT=8000"
@@ -51,7 +61,7 @@ set "PORT=8003"
 :port_ok
 
 REM 后台启动服务，日志写到 service.log
-start "" /b cmd /c "".venv\Scripts\uvicorn.exe" app.main:app --host 127.0.0.1 --port %PORT% > service.log 2>&1"
+start "" /b cmd /c ""%RUN_PY%" -m uvicorn app.main:app --host 127.0.0.1 --port %PORT% > service.log 2>&1"
 
 REM 每 1 秒检查一次，最多等 90 秒
 set /a WAIT=0
