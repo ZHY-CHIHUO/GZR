@@ -20,7 +20,7 @@ class GuCatalogueTests(unittest.TestCase):
         cls.data = json.loads(WIKI_PATH.read_text(encoding="utf-8"))
 
     def test_top_level_other_no_longer_contains_gu_entries(self):
-        self.assertFalse([name for name in self.data["其他"] if name.endswith("蛊")])
+        self.assertNotIn("其他", self.data)
 
     def test_explicit_rank_entries_are_grouped_without_false_positives(self):
         second_rank = self.data["蛊虫"]["二转"]

@@ -596,12 +596,8 @@ def validate(data):
         raise ValueError("海角阁的空 section 未保留")
     if data.get("洞天秘境", {}).get("洞天", {}).get("长生天", {}).get("section") != "":
         raise ValueError("长生天的空 section 未保留")
-    deleted = next(
-        (item for item in data.get("_deleted", []) if item.get("name") == "免试"),
-        None,
-    )
-    if not deleted or (deleted.get("cat"), deleted.get("path", [])) != ("五域地理", []):
-        raise ValueError("免试回收站记录未保留")
+    if "其他" in data or "_deleted" in data:
+        raise ValueError("最终百科不应保留其他分类或回收站数据")
 
 
 def restructure(data, source_items):

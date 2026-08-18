@@ -61,7 +61,7 @@ set "PORT=8003"
 :port_ok
 
 REM 后台启动服务，日志写到 service.log
-start "" /b cmd /c ""%RUN_PY%" -m uvicorn app.main:app --host 127.0.0.1 --port %PORT% > service.log 2>&1"
+start "" /b cmd /c ""%RUN_PY%" -m uvicorn app.main:app --app-dir "%CD%" --host 127.0.0.1 --port %PORT% > service.log 2>&1"
 
 REM 每 1 秒检查一次，最多等 90 秒
 set /a WAIT=0

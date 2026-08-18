@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from . import config, library
 from .rag import Retriever, ask_llm, build_prompt, estimate_cost, format_source, mock_answer
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.0.0"
 
 retriever: Retriever | None = None
 _wiki_index_job_lock = threading.Lock()

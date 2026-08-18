@@ -84,7 +84,9 @@ def add_ancient_battle_formations(data: dict[str, object]) -> dict[str, object]:
     other = data.get(OTHER)
     if not isinstance(kills, dict):
         raise ValueError("missing 杀招 category")
-    if not isinstance(other, dict):
+    if other is None:
+        other = {}
+    elif not isinstance(other, dict):
         raise ValueError("missing 其他 category")
 
     group = kills.get(GROUP)
@@ -132,7 +134,7 @@ def add_ancient_battle_formations(data: dict[str, object]) -> dict[str, object]:
 
 def validate(data: dict[str, object]) -> None:
     kills = data.get(KILL_MOVES)
-    other = data.get(OTHER)
+    other = data.get(OTHER, {})
     if not isinstance(kills, dict) or not isinstance(other, dict):
         raise ValueError("missing required categories")
     group = kills.get(GROUP)

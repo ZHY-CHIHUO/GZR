@@ -24,9 +24,9 @@ class AncientBattleFormationTests(unittest.TestCase):
         group = kills["上古战阵"]
         self.assertEqual(list(group), list(formations.FORMATIONS))
         self.assertNotIn("四通八达", kills)
+        self.assertNotIn("其他", self.data)
         for name, desc in formations.FORMATIONS.items():
             self.assertTrue(group[name]["desc"].startswith(desc))
-            self.assertNotIn(name, self.data["其他"])
 
     def test_existing_four_connections_detail_is_retained(self):
         desc = self.data["杀招"]["上古战阵"]["四通八达"]["desc"]

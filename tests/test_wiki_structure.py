@@ -52,8 +52,8 @@ class WikiStructureTests(unittest.TestCase):
         self.assertNotIn("其他", gu_ranks)
         self.assertTrue(is_leaf(gu_ranks["原文"]))
         self.assertEqual(self.data["仙蛊屋"]["海角阁"]["section"], "")
-        deleted = next(item for item in self.data["_deleted"] if item["name"] == "免试")
-        self.assertEqual((deleted["cat"], deleted["path"]), ("五域地理", []))
+        self.assertNotIn("其他", self.data)
+        self.assertNotIn("_deleted", self.data)
 
     def test_realm_people_alien_and_school_categories_are_restructured(self):
         self.assertNotIn("五域地理", self.data)
