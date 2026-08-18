@@ -1,0 +1,2 @@
+[提示] 未找到 Python。
+将打开 Python 官网。安装时请勾选 Add Python to PATH，完成后重新双击本文件。

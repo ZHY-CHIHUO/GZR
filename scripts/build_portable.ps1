@@ -74,7 +74,8 @@ Copy-Tree -Source (Join-Path $projectRoot "app") -Destination (Join-Path $portab
 Copy-Tree -Source (Join-Path $projectRoot "data_jina2") -Destination (Join-Path $portableProject "data_jina2") -ExcludeDirectories @("__pycache__")
 Copy-Tree -Source (Join-Path $projectRoot "model_cache") -Destination (Join-Path $portableProject "model_cache") -ExcludeDirectories @("__pycache__")
 Copy-Tree -Source (Join-Path $projectRoot "scripts") -Destination (Join-Path $portableProject "scripts") -ExcludeDirectories @("__pycache__")
-foreach ($name in @("README.md", ".env.example", "requirements.txt", "一键启动.bat")) {
+Copy-Tree -Source (Join-Path $projectRoot "launcher_text") -Destination (Join-Path $portableProject "launcher_text")
+foreach ($name in @("README.md", ".env.example", "requirements.txt", "一键启动.bat", "start.bat")) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination (Join-Path $portableProject $name) -Force
 }
 
@@ -91,6 +92,7 @@ Copy-Tree -Source $sitePackages -Destination (Join-Path $runtime "Lib/site-packa
 foreach ($name in @("gu-zhen-ren", "gu-zhenren-lore", "gu_zhen_ren_pdf")) {
     Copy-Tree -Source (Join-Path $workspaceRoot $name) -Destination (Join-Path $stage $name) -ExcludeDirectories @(".git", "__pycache__")
 }
+Copy-Item -LiteralPath (Join-Path $workspaceRoot "一键启动.bat") -Destination (Join-Path $stage "一键启动.bat") -Force
 Copy-Item -LiteralPath (Join-Path $projectRoot "docs/便携版使用说明.txt") -Destination (Join-Path $stage "使用说明.txt") -Force
 
 $portablePython = Join-Path $runtime "python.exe"
